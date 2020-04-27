@@ -6,11 +6,11 @@
 
 **tcp头部**
 
-![tcp_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/tcp_head.png)
+![tcp_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/tcp_head.jpg)
 
 **udp头部**
 
-![udp_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/udp_head.png)
+![udp_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/udp_head.jpg)
 
 
 
@@ -76,15 +76,15 @@ udp首部只有 8 个字节，并且是**固定不变**的，开销较小
 
 **三次握手**
 
-![three_handshake](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake.png)
+![three_handshake](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake.jpg)
 
 **三次握手的三个报文**
 
-![three_handshake_1_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake_1_head.png)
+![three_handshake_1_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake_1_head.jpg)
 
-![three_handshake_2_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake_2_head.png)
+![three_handshake_2_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake_2_head.jpg)
 
-![three_handshake_3_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake_3_head.png)
+![three_handshake_3_head](https://github.com/yinabameguru/note/blob/master/tcp/resources/three_handshake_3_head.jpg)
 
 
 
