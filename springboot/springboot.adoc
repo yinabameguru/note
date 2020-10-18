@@ -1,0 +1,68 @@
+= springboot
+
+'''
+
+== springboot 代码学习
+
+'''
+
+=== 1.springboot modules
+
+* *spring-boot*
+
+* *spring-boot-autoconfigure*
+
+* *spring-boot-starters*
+
+* *spring-bootcli*
+
+* *spring-boot-actuator*
+
+* *spring-boot-actuator-autoconfigure*
+
+* *spring-boot-test*
+
+* *spring-boot-test-autoconfigure*
+
+* *spring-boot-loader*
+
+* *spring-boot-devtools*
+
+== springboot 应用学习
+
+'''
+
+=== CommandLineRunner
+
+实现CommandLineRunner接口并重写run方法的**bean**，在spring项目启动后，自动执行run方法。
+
+https://docs.spring.io/spring-boot/docs/current/api/[doc]
+https://github.com/spring-projects/spring-boot/blob/2.3.x/spring-boot-tests/spring-boot-smoke-tests/spring-boot-smoke-test-aop/src/main/java/smoketest/aop/SampleAopApplication.java[example]
+
+'''
+
+=== WebApplicationType
+
+SpringApplication启动时，会推论出应用程序的类型，默认是none，当引入org.springframework.boot:spring-boot-starter-web时，类加载器中会有class文件org.springframework.web.context.ConfigurableWebApplicationContext，此时应用程序类型为servlet
+
+[source,java]
+.WebApplicationType.java
+----
+static WebApplicationType deduceFromClasspath() {
+		if (ClassUtils.isPresent(WEBFLUX_INDICATOR_CLASS, null) && !ClassUtils.isPresent(WEBMVC_INDICATOR_CLASS, null)
+				&& !ClassUtils.isPresent(JERSEY_INDICATOR_CLASS, null)) {
+			return WebApplicationType.REACTIVE;
+		}
+		for (String className : SERVLET_INDICATOR_CLASSES) {
+			if (!ClassUtils.isPresent(className, null)) {
+				return WebApplicationType.NONE;
+			}
+		}
+		return WebApplicationType.SERVLET;
+	}
+----
+
+
+https://github.com/spring-projects/spring-boot/blob/2.3.x/spring-boot-project/spring-boot/src/main/java/org/springframework/boot/WebApplicationType.java[WebApplicationType.java]
+
+
