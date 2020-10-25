@@ -68,6 +68,14 @@ static WebApplicationType deduceFromClasspath() {
 
 https://github.com/spring-projects/spring-boot/blob/2.3.x/spring-boot-project/spring-boot/src/main/java/org/springframework/boot/WebApplicationType.java[WebApplicationType.java]
 
+'''
+
+=== ApplicationEvent
+
+==== SpringApplicationEvent
+
+===== ApplicationStartingEvent
+
 == springboot 实践
 
 '''
