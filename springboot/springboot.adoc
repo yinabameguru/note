@@ -1,12 +1,15 @@
 = springboot
-
-'''
+meguru <764904418@qq.com>
+v1.0, 2020-10-25
+:toc:
+:toc-title: 目录
+:toclevels: 5
 
 == springboot 代码学习
 
 '''
 
-=== 1.springboot modules
+=== springboot modules
 
 * *spring-boot*
 
@@ -65,7 +68,9 @@ static WebApplicationType deduceFromClasspath() {
 
 https://github.com/spring-projects/spring-boot/blob/2.3.x/spring-boot-project/spring-boot/src/main/java/org/springframework/boot/WebApplicationType.java[WebApplicationType.java]
 
-== springboot实践
+== springboot 实践
+
+'''
 
 === 使用JavaMailSender发送邮件
 
@@ -103,6 +108,8 @@ public class MailHelper {
 ====
 附件名称需要转码
 ====
+
+'''
 
 === springboot的秒表计时器StopWatch
 
