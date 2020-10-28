@@ -135,3 +135,10 @@ public class MailHelper {
 
 === springboot的秒表计时器StopWatch
 
+== 编码技巧学习
+
+=== 利用内部类实现多继承
+
+DefaultApplicationArguments实现ApplicationArguments接口，并通过内部类Source继承SimpleCommandLinePropertySource从而达到多继承的效果。
+
+使用内部类实现多继承时，会出现外部类无法调用内部类父类中protected方法的情况，这时需要内部类重写父类方法扩大访问范围。Source中就通过重写和getOptionValues和getNonOptionArgs方法将protected扩大为public。
