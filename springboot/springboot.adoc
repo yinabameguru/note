@@ -80,6 +80,16 @@ https://github.com/spring-projects/spring-boot/blob/2.3.x/spring-boot-project/sp
 
 === ApplicationEventMulticaster
 
+'''
+
+=== SpringApplicationRunListener
+
+==== EventPublishingRunListener
+
+'''
+
+=== ResolvableType
+
 == springboot 实践
 
 '''
