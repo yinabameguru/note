@@ -1,0 +1,35 @@
+# refactor
+
+why refactor?::
+
+- Refactoring makes your organization’s code simpler, which means fewer bugs and easier maintenance.
+
+- If you have fewer code lines, you will have fewer potential bugs
+
+- Simpler code enables technical agility,Technical agility enables business agility
+
+how to refactor?::
+
+- TDD TDD is an iterative process or a three-step dance—red, green, refactor
+
+-  instead of doing a single large refactoring, doing a series of smaller microrefactorings
+
+- DRY-Don‘t Repeat Yourself
+
+
+TDD three-step—red, green, refactor::
+
+- Write a new test for that new feature; of course, the code will fail the test because the feature doesn’t work yet. TDD says the test has gone red.
+
+- Write Java code to implement the new feature until the new test passes. All the other tests must continue passing as well. This means the tests have gone green.
+
+- Clean up and improve the production code by refactoring the code, which results in better code. All the tests must continue to pass.
+
+image::TDD.jpeg[TDD]
+
+code kata::
+ - kata is a series of movements that you do regularly. You repeat your actions so many times that the body builds muscle memory. Without thinking about them, you will execute the moves.
+
+
+
+https://blogs.oracle.com/javamagazine/refactoring-java-part-1-driving-agile-development-with-test-driven-development[refactoring-java-part-1-driving-agile-development-with-test-driven-development]
