@@ -43,6 +43,21 @@ rest url::
 - POST index_name/_search //搜索返回耗时概要信息
 
     {“profile” : true}
+    
+== index settings
+
+=== static settings
+
+index.number_of_shards::
+- Primary shard number,Defaunt is 1.
+
+index.codec::
+- comparesses strategy,default is LZ4(a higher compression ratio, at the expense of slower stored fields performance).
+
+=== dynamic settings
+
+
+
 
 == es慢查询问题排查
 
