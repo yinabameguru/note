@@ -1,0 +1,67 @@
+= Utils
+
+== 根据类中字段的get方法获取字段名
+
+[source, java]
+.SerializedFunction.java
+----
+public interface SerializedFunction<T, R> extends Function<T, R>, Serializable {
+
+}
+----
+
+[source, java]
+.FieldUtils.java
+----
+@Slf4j
+public class FieldUtils {
+
+    public static <T> String getFieldName(SerializedFunction<T, ?> sp) {
+        Objects.requireNonNull(sp);
+        Object invokeResult = null;
+        try {
+            Method writeReplace = sp.getClass().getDeclaredMethod("writeReplace");
+            writeReplace.setAccessible(true);
+            invokeResult = writeReplace.invoke(sp);
+        } catch (Exception e) {
+            log.error("get field name error");
+        }
+        if (invokeResult instanceof SerializedLambda) {
+            SerializedLambda serializedLambda = (SerializedLambda) invokeResult;
+            String methodName = serializedLambda.getImplMethodName();
+            return methodToFieldName(methodName);
+        }
+        throw new IllegalArgumentException();
+    }
+
+    private static String methodToFieldName(String methodName) {
+        if (methodName.startsWith("is")) {
+            methodName = methodName.substring(2);
+        } else if (methodName.startsWith("get")) {
+            methodName = methodName.substring(3);
+        } else {
+            throw new IllegalArgumentException();
+        }
+
+        if (methodName.length() > 0) {
+            methodName = methodName.substring(0, 1).toLowerCase(Locale.ENGLISH) + methodName.substring(1);
+        }
+
+        return methodName;
+    }
+
+
+}
+----
+
+[source, java]
+.FieldUtilsTest.java
+----
+public class FieldUtilsTest {
+
+    @Test
+    public void getFieldName() {
+        String fieldName = FieldUtils.getFieldName(Object::getClass);
+        Assert.assertEquals(fieldName, "class");
+    }
+----
