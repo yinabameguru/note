@@ -1,0 +1,322 @@
+= DBMS
+
+== DBMS Normalization
+
+=== First Normal Form (1NF)
+
+- A relation will be 1NF if it contains an actomic value.
+- It states that an attribute of a table cannot hold multiple values. It must hold onle single-valued attribute.
+- First normal form disallows the multi-value attribute, composite attribute, and their combinations.
+
+**Example**
+
+Relation `employee` is not in 1NF because of multi-valued attribute `emp_phone`
+
+.employee
+[cols=4, options=header]
+|===
+|emp_id
+|emp_name
+|emp_phone
+|emp_state
+
+|14
+|John
+|7272826385,9064738238
+|UP
+
+|20
+|Harry
+|8574783832
+|Bihar
+
+|12
+|Sam
+|7390372389,8589830302
+|Punjab
+
+|===
+
+The decomposition of the `employee` table into 1NF has been shown below:
+
+.employee
+[cols=4, options=header]
+|===
+|emp_id
+|emp_name
+|emp_phone
+|emp_state
+
+|14
+|John
+|7272826385
+|UP
+
+|14
+|John
+|9064738238
+|UP
+
+|20
+|Harry
+|8574783832
+|Bihar
+
+|12
+|Sam
+|7390372389
+|Punjab
+
+|12
+|Sam
+|8589830302
+|Punjab
+
+|===
+
+=== Second Normal Form (2NF)
+
+- In the 2NF, relation must be in 1NF.
+- In the second normal form, all non-key attributes are fully functional dependent on the candidate key(not primary key).
+
+TIP: Primary Key is a unique and non-nukk key which identify a record uniquely in table. Atable can have only one primary key. Candidate key is also a unique key to identify a record uniquely in atable but a tale can have multiple candidate keys.
+
+**example**
+
+Let's assume, a school can store the data of teachers and the subjects they teach. In a school, a teacher can teach more than one subject.
+
+.teacher
+[cols=3, options=header]
+|===
+|teacher_id
+|subject
+|teacher_age
+
+|25
+|Chemistry
+|30
+
+|25
+|Biology
+|30
+
+|47
+|English
+|35
+
+|83
+|Math
+|38
+
+|83
+|Computer
+|38
+
+|===
+
+In the given table, non-prime attribute teacher_age is dependent on teacher_id whitch is a proper subset of a candidate key, That's why it violates the rule for 2NF.
+
+To convert the given table into 2NF, we decompose it into two tables:
+
+.teacher_detail
+[cols=2, options=header]
+|===
+|teacher_id
+|teacher_age
+
+|25
+|30
+
+|47
+|35
+
+|83
+|38
+
+|===
+
+.teacher_subject
+[cols=2, options=header]
+|===
+|teacher_id
+|subject
+
+|25
+|Chemistry
+
+|25
+|Biology
+
+|47
+|English
+
+|83
+|Math
+
+|83
+|Computer
+
+|===
+
+---
+
+= 数据库管理系统
+
+== 范式
+
+=== 第一范式
+
+- 第一范式要求表的属性都是原子的，不可再分
+- 这意味着表的属性不能有多个值，必须只能有单值属性
+- 第一范式禁止多值属性、组合属性、以及它们的组合
+
+**例**
+
+`employee` 表不满足第一范式，因为他有多值属性 `emp_phone`
+
+.employee
+[cols=4, options=header]
+|===
+|emp_id
+|emp_name
+|emp_phone
+|emp_state
+
+|14
+|John
+|7272826385,9064738238
+|UP
+
+|20
+|Harry
+|8574783832
+|Bihar
+
+|12
+|Sam
+|7390372389,8589830302
+|Punjab
+
+|===
+
+分解 `employee` 满足第一范式
+
+.employee
+[cols=4, options=header]
+|===
+|emp_id
+|emp_name
+|emp_phone
+|emp_state
+
+|14
+|John
+|7272826385
+|UP
+
+|14
+|John
+|9064738238
+|UP
+
+|20
+|Harry
+|8574783832
+|Bihar
+
+|12
+|Sam
+|7390372389
+|Punjab
+
+|12
+|Sam
+|8589830302
+|Punjab
+
+|===
+
+=== 第二范式
+
+- 第二范式必须满足第一范式
+- 所有的非键（non-key）属性必须完全依赖于**候选建（candidate key）**，即依赖于所有的候选键
+
+TIP: 主键（primary key）与候选键（candidate key）。 `主键` 是唯一非空的键，在表中标识唯一的一行数据。一张表只能拥有一个主键。 `候选键` 候选键也是在表中标识唯一一行数据，但是一张表可以拥有多个候选键
+
+**例**
+
+以学校为例，学校存储了老师及老师所教课程的数据，一个老师可以叫多门课程。
+
+.teacher
+[cols=3, options=header]
+|===
+|teacher_id
+|subject
+|teacher_age
+
+|25
+|Chemistry
+|30
+
+|25
+|Biology
+|30
+
+|47
+|English
+|35
+
+|83
+|Math
+|38
+
+|83
+|Computer
+|38
+
+|===
+
+teacher表中，有两个候选键，teacher_id和subject，和非键属性teacher_age，teacher_age只依赖于teacher_id（候选键的一部分，真子集），这里违法了2NF。
+
+修改teacher表，满足第二范式
+
+.teacher_detail
+[cols=2, options=header]
+|===
+|teacher_id
+|teacher_age
+
+|25
+|30
+
+|47
+|35
+
+|83
+|38
+
+|===
+
+.teacher_subject
+[cols=2, options=header]
+|===
+|teacher_id
+|subject
+
+|25
+|Chemistry
+
+|25
+|Biology
+
+|47
+|English
+
+|83
+|Math
+
+|83
+|Computer
+
+|===
+
