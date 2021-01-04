@@ -16,15 +16,15 @@ public interface SerializedFunction<T, R> extends Function<T, R>, Serializable {
 @Slf4j
 public class FieldUtils {
 
-    public static <T> String getFieldName(SerializedFunction<T, ?> sp) {
-        Objects.requireNonNull(sp);
+    public static <T> String getFieldName(SerializedFunction<T, ?> sf) {
+        Objects.requireNonNull(sf);
         Object invokeResult = null;
         try {
-            Method writeReplace = sp.getClass().getDeclaredMethod("writeReplace");
+            Method writeReplace = sf.getClass().getDeclaredMethod("writeReplace");
             writeReplace.setAccessible(true);
-            invokeResult = writeReplace.invoke(sp);
+            invokeResult = writeReplace.invoke(sf);
         } catch (Exception e) {
-            log.error("get field name error");
+            log.error("get field name error", e);
         }
         if (invokeResult instanceof SerializedLambda) {
             SerializedLambda serializedLambda = (SerializedLambda) invokeResult;
