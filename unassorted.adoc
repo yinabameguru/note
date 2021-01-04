@@ -1,4 +1,6 @@
-# refactor
+= refactor
+
+== Driving agile development with test-driven development
 
 why refactor?::
 
@@ -33,3 +35,228 @@ code kata::
 
 
 https://blogs.oracle.com/javamagazine/refactoring-java-part-1-driving-agile-development-with-test-driven-development[refactoring-java-part-1-driving-agile-development-with-test-driven-development]
+
+---
+
+== Stabilizing your legacy code and technical debt
+
+https://github.com/emilybache/GildedRose-Refactoring-Kata[GildedRose-Refactoring-Kata]
+
+what's technical debt?::
+- Technical debt is code with problems that can be improved with refactoring or code without automated tests
+
+the interest payments::
+- the biggest cost is lost of technecal agility,and then lose the business technecal
+
+why is technical debt a problem?::
+- taking the time to fix the code to improve technical and business agility
+
+how to do?::
+
+- using test-refactor-add methodology for working with legacy code
+
+step::
+
+- Add pin-down tests. They will help you understand the legacy code’s external behavior, and they will also pin down the code’s behavior so that if something breaks, you’ll know it.
+
+- Discover more behaviors with code coverage tools
+
+- Testing if/else statements by branch coverage
+
+- Refactor
+
+- Add the new feature
+
+https://blogs.oracle.com/javamagazine/refactoring-java-part-2-stabilizing-your-legacy-code-and-technical-debt[refactoring-java-part-2-stabilizing-your-legacy-code-and-technical-debt]
+
+= CodeKata
+
+what is the goal?::
+
+- the point of the kata is not arriving at a correct answer. The point is the stuff you learn along the way. The goal is the practice, not the solution.
+
+
+= other
+
+what's crud?::
+- create,read,update,delete
+
+
+= jvm 
+
+https://docs.oracle.com/javase/specs/jvms/se8/html/index.html[The Java® Virtual Machine Specification]
+
+== metaspace
+
+=== What is Metaspace?
+
+Matespaces memory the VM uses to store calss metadata
+
+metadata::
+
+- the "Klass" structure - the VM-internal representation of runtime state of a java class.
+
+- Method metadata - runtime equivalent of the method_info in the class file,containing things like the bytecode,exception table,constants,etc.
+
+- The constant pool
+
+- Annotations
+
+- method counters collected at runtime as a base for JIT decisions
+
+- etc
+
+Even though java.lang.Class is a java object living in Java heap, the class metadata itself are no Java objects and do not live in the Java heap. They live in a native memory region outside of the Java heap. That region is called Metaspace.
+
+**When does Metaspace get allocatied?**
+
+Allocation from Metaspace is coupled to class loading.
+
+When a class is loaded and its runtime representation in the JVM is being prepared, Metaspace is allocated by its class loader to store the class’ metadata.
+
+**When does Metaspace get released?**
+
+The allocated Metaspace for a class is owned by its class loader 1. It is only released when that class loader itself is unloaded, not before.
+
+That in turn happens only after all classes loaded by this loader have no live instances anymore, and there are no references to these classes and its class loader, and a GC did run (see: https://docs.oracle.com/javase/specs/jls/se7/html/jls-12.html#jls-12.7[JLS 12.7. Unloading of Classes and Interfaces]).
+ 
+
+https://stuefe.de/posts/metaspace/what-is-metaspace/[what-is-metaspace]
+
+**Memory is often retained!**
+
+**"releasing Metaspace" does not necessarily mean that memory is returned to the OS**.
+
+All or a part of that memory may be retained within the JVM;it may bu reused for future class loading,but at the moment it remains unused within the JVM process.
+
+=== Metaspace Architecture
+
+metaspace implemented in layers
+
+- At the bottom, memory is allocated in large regions from the OS. 
+
+- At the middle, we carve those regions in no-so-large chunks and hand them over to class loaders
+
+- At the top, the class loaders  cut up those chunks to serve the caller code.
+
+==== The bottom layer : The space list
+
+memory for Metaspace is reserved and on demand committed from the OS via virtual memory calls like mmap(3). This happens in regions of 2MB size (on 64bit platforms).
+
+These mapped regions are kept as nodes in a global linked list named **VitualSpaceList**.
+
+Each node manages a high water mark, separating the committed space from the still uncommitted space. New pages are committed on demand, when allocations reach the high-water-mark. A little margin is kept to avoid too frequent calls into the OS.
+
+This goes on until the node is completely used up. Then, a new node is allocated and added to the list. The old node is getting “retired”1.
+
+Memory is allocated from a node in chunks called **MetaChunk**. They are come in three sizes named specialized, small and medium - naming is historic - typically 1K/4K/64K in size
+
+==== The middle layer : Metachunk
+
+When a class loader requests memory from metaspace for a piece of metadata, it will get a Metachunk instead - a piece of memory typically much larger than what was it requested. because **allocatng memory directly from the global VirtualSpaceList is expensive**.(VirtualSpaceLIst is a global structure and **needs locking**)
+
+**How does the Metaspace allocator decide how large a chunk to hand to the loader?**
+
+the rule(all rules based on **guesswork**)::
+
+- A freshly started standard loader will get small 4K chunks, until an arbitrary threshold is reached(4), at whitch the Metaspace allocator visibly looses patience and starts giving the loader larger 64K chunks.
+
+- the bootstrap classloader is known as a loader which tends loads alot of classes. So tie allocator gives it a massive chunk, right from the start(4M).
+
+- Reflection class loaders and class loaders for anonymous classes are known to load only one class each. So they are given very small(1K) chunks from the start  because the assumption is that they will stop needing Metaspace very soon and giving them andthing more would be waste.
+
+
+the guesswork: handing a loader more space than it presently needs under the assumption that it will need it very soon
+
+==== The upper layer : Metablock
+
+MetaBlock carves up the Metachunk into small allocation units. MetaBlock is actual units handed out to the caller(example : a Metablock houses one InstanceKlass).
+
+The lifetime of class metadata is bound to the class loader, it will be released in bulk when the class loader dies. So the JVM does not need to care about freeing random Metablocks.
+
+since the chunk is owned by one class loader, that portion can only ever be used by the same loader. If the loader stops loading classes, that space is effectively wasted.
+
+==== ClassloaderData and ClassLoaderMetaspace
+
+The class loader keeps its native representation in a native structure called **ClassLoaderData**.
+
+That structure **has** a reference to one **ClassLoaderMetaspace** structure which keeps a list of all Metachunks this loader has in use.
+
+**ClassloaderData != ClassLoaderMetaspace**
+
+==== Anonymous classes
+
+"Metaspace memory is owned by its class loader", but not for anonymous classes.
+
+When a loader loads an anonymous class, this class gets its own separate ClassLoaderData whose lifetime is coupled to that of the anonymous class instead of the housing  class loader. 
+
+That means that a class loader has a primary ClassLoaderData for all normal loaded classes, and secondary ClassLoaderData structures for each anonymous class(like Lambdas and Method handles).
+
+**When is memory returned to the OS**
+
+When all chunks whithin one VirtualSpaceListNode happen to be free, that node itself is removed. The node is removed from the VirtualSpaceList. Its free chunks are removed from the Metaspace freelist. The node is unmapped and its memory returned to the OS. the ndoe is purged.
+
+Because of a node has some chunks, and these chunks onwed by one or some class loaders, so if all chunks in a node is free, all class loaders owning those chunks must have died. 
+
+if these chunks are owned by different class loaders with different life spans, nothing will be freed. 
+
+Summary::
+
+- Memory is reserved from the OS in2MB-sized regions and kept in a global linked list. These regions are committed on demand.
+
+- These regions are carved into chunks, whitch are handed to chalss loaders. A chunk belongs to one class loader. 
+
+- The chunk is further carved into tiny allocations, called blocks. These are the allocaton units handed out to callers. 
+
+- When aloader deis, the chunks it owns are added to a global free list and reused. Part of the memory may be released to the OS, but that depends highly on fragmentation and luck.
+
+=== What is Compressed Class Space
+
+**Compressed Object Pointer and Compressed Class Pointers
+
+Compressed pointers are a way to reference data - objects in Java heap or class metadata in Metaspace - using 32bit reference even on a 64 bit platform.
+
+**advantage** : smaller pointer size resulting in reduced memory footprint and batter usage of cache.
+
+
+Each Java object has a reference to a native structure living outside the Java heap in Metaspace: the **Klass** structure.
+
+When using compressed class pointers, that reference is a 32bit value. In order to find the real 64bit address of that structure, we add a known common base to it, , and potentially also left-shift the value by three bits.
+
+That technique places a technical restriction on where to allocate those Klass structures::
+
+- Each possible location of a Klass structure must fall within a range of 4G (unshifted mode)|32G(shifted mode), to be reachable with a 32bit offset from a common base.
+
+- Both restrictions mean that we need to allocate the Metaspace as one contiguous region.
+
+split the metaspace into two parts::
+
+- The class part, housing Klass structures, has to be allocated as one contiguius region whitch cannot be larger than 32G.
+
+- The non-class part containing everything else, does not.
+
+CompressedClassSpaceSize defaults to 1GB, in hotspot is at 3GB max.
+
+Also note that we are always talking about virtual size, not comitted size. That memory is only committed when needed. Very simplified, virtual size on most modern Operating Systems costs almost nothing, it is just an addres space reservation.
+
+**Implementation**
+
+Global structures VirtualSpaceList and ChunkManager were all duplicated and now exist in two variants, "class space" variant and a "non-class space" variant.
+
+But since we need a contiguous address range for the class space, we cannot really use a chain of mapped regions; so the class space list is degenerated: it only contains a single node and cannot grow. That single node is gigantic compared to its brethren in the non-class list. That node is the compressed class space.
+
+-XX:+UseCompressedOops enables compressed object pointers.
+
+-XX:+UseCompressedClassPointers enables compressed class pointers.
+
+Both are on by default but can be switched off manually.
+
+-XX:+UseCompressedClassPointers requires -XX:+UseCompressedOops but not vice versa: one can run with compressed oops on without compressed class pointers.
+
+Note that compressed object pointers require Java heaps < 32G. So, if the Java heap is >= 32G, compressed oops will be switched off, which will also switch off compressed class pointers.
+
+== collector
+
+=== Garbage-First Garbage Collector
+
+https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/g1_gc.html#garbage_first_garbage_collection[Garbage-First Garbage Collector]
