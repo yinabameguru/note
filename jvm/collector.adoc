@@ -1,0 +1,120 @@
+= 垃圾收集器
+
+参考文档：
+https://docs.oracle.com/en/java/javase/11/gctuning/introduction-garbage-collection-tuning.html#GUID-326EB4CF-8C8C-4267-8355-21AB04F0D304[Garbage Collection Tuning]     https://docs.oracle.com/en/java/javase/11/vm/java-virtual-machine-technology-overview.html#GUID-982B244A-9B01-479A-8651-CB6475019281[Java Virtual Machine Guide]
+
+== 什么是垃圾收集器
+
+可以理解为memory manager——应用程序的内存管理者
+
+垃圾收集器通过这些操作管理内存::
+
+. 从操作系统分配内存
+
+. 根据请求，将内存分配给应用程序
+
+. 确定已经分配给应用程序的内存中，哪部分仍在使用
+
+. 回收未使用的内存，供应用程序重新使用
+
+. 将内存返还给操作系统
+
+基于垃圾收集器管理内存的应用程序，在操作系统上的内存分配模型如下图：
+
+image::resource\gc管理的应用的内存模型.png[width="300", height="200"]
+
+内存管理流程：
+
+
+== 垃圾收集器关注的指标
+
+最大暂停时间、吞吐量、内存占用量
+
+**最大暂停时间**：单次垃圾收集占用的最大时间，影响用户线程单次的阻塞时间
+
+**吞吐量**：依据垃圾收集时间在应用程序运行总时间中的占比衡量，公式：1 /（1+ GCTimeRatio），通过-XX: GCTimeRatio=19，将垃圾收集的目标设置为总时长的5%。
+
+垃圾收集器中维护着这样一个动态循环：当满足最大暂停时间和吞吐量指标时，虚拟机会缩小堆，直到无法满足其中一个指标。
+
+
+image::resource\虚拟机堆内存动态管理.png[width="300", height="200"] 
+
+TIP: 由于jvm会动态调整堆的大小，尽量不要给堆设置最大值，可能会影响到性能。除非要设置比默认值更大的堆（默认是物理内存的1/4）
+
+TIP: 如果达到最大内存限制，未达到吞吐量目标，加内存，加不动说明目标太高了
+
+TIP: 这里还需要考虑到硬件性能，目前的大内存延迟会有比较高的访问延迟，对最大暂停时间、吞吐量都会有影响
+
+TIP: 有些人认为Web服务器的正确度量标准是吞吐量，因为垃圾回收期间的暂停可能是可以容忍的，或者可能被网络等待时间掩盖了，但目前的虚拟机发展好像是朝着低延迟方向的，这里似乎还有争论
+
+== 分代垃圾收集
+
+简单的串行收集器：暂停用户线程，扫描存活对象，清理死亡对象。
+
+**致命缺点**：存活对象多时，扫描暂停时间太久
+
+**如何优化？**
+
+基于weak generational hypothesis，引入分代（generation）
+
+**分代垃圾收集器**
+
+image::resource\jsgct_dt_006_prm_gn_sz_new.png[]
+
+初始化时，vm向操作系统申请Xmx大小的连续虚拟内存地址空间，按-XX: NewRatio=nnn，分配给年轻代和老年代。年轻代按-XX: SurvivorRatio=nnn，将年轻代分为1个eden和2个survivor
+
+对象最初会被分配到eden
+
+当年轻代空间用尽后，会发生一次只针对年轻代的回收，存活对象越少，回收越快，基于weak generational hypothesis，年轻代回收暂停时间会明显优于全堆回收。
+
+引入分代之后，收集器会为每个对象维护一个年龄（age），对象每经历一次年轻代回收年龄会+1，达到某个阈值时，对象会被移动到老年代。这个过程称为衰老（aging）
+
+通常每次年轻代回收过程中，一些幸存的对象会被移动到老年代，当老年代用尽，会发生一次老年代回收（全堆回收）
+
+TIP: 大对象直接到老年代
+
+
+
+== 影响gc性能的两个主要因素：Xmx、NewRatio
+
+
+**Xmx**
+在限定的Xmx下，vm会增大、减小堆以满足MinHeapFreeRatio（40%）和MaxHeapFreeRatio（70%）
+
+如果年轻代或老年代的空闲内存小于40%，相应的代内存会增大，大于70%，会减小
+
+
+TIP: 如何减小堆内存占用？减小MaxHeapFreeRatio
+
+
+**NewRatio**
+
+年轻代越大，年轻代gc频率越低，同时对象年龄增长周期变长，进入老年代的对象数占总对象数的比例会减少。
+
+但在给定的Xmx下，老年代就要减小，可能增加老年代的gc频率，最佳方案要根据分配对象的生命周期确定
+
+== The Mostly Concurrent Collectors(通常并发收集器？)
+
+The mostly concurrent collectors perform parts of their work concurrently to the application, hence their name.
+
+收集器与应用程序并发的执行部分工作，因此得名。
+
+- CMS
+
+- G1
+
+The mostly concurrent collector trades processor resources (which would otherwise be available to the application) for shorter major collection pause time.
+
+收集器用处理器资源(app使用的)换取更短暂的major collection pause time。
+
+并发收集器的开销::
+
+- 主要开销是并发收集部分，会使用更多的处理器资源。
+
+- 开启并发也会有额外的开销。（这里通常导致并发收集器的停顿时间虽然短，但是吞吐量也往往比其他收集器低）
+
+在多核处理器上，app线程在整个并发收集阶段都是可获得cpu的，因为垃圾收集线程并不会暂停app。结果通常是停顿时间短，但是更少的处理器资源被用于app，app会减速（吞吐量降低）
+
+由于在并发阶段，最少有一个处理器被用于垃圾收集，
+
+=== G1
