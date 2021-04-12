@@ -1,0 +1,6 @@
+# jdk
+
+## Compact Strings
+
+jdk9对String占用内存进行了优化,默认启用，使用-XX:-CompactStrings 禁用
+https://docs.oracle.com/en/java/javase/11/vm/java-hotspot-virtual-machine-performance-enhancements.html#GUID-D2E3DC58-D18B-4A6C-8167-4A1DFB4888E4[Compact Strings]
