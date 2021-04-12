@@ -1,0 +1,380 @@
+= jvm 
+
+https://docs.oracle.com/javase/specs/jvms/se8/html/index.html[The Java® Virtual Machine Specification]
+
+== metaspace
+
+=== What is Metaspace?
+
+Matespaces memory the VM uses to store calss metadata
+
+metadata::
+
+- the "Klass" structure - the VM-internal representation of runtime state of a java class.
+
+- Method metadata - runtime equivalent of the method_info in the class file,containing things like the bytecode,exception table,constants,etc.
+
+- The constant pool
+
+- Annotations
+
+- method counters collected at runtime as a base for JIT decisions
+
+- etc
+
+Even though java.lang.Class is a java object living in Java heap, the class metadata itself are no Java objects and do not live in the Java heap. They live in a native memory region outside of the Java heap. That region is called Metaspace.
+
+**When does Metaspace get allocatied?**
+
+Allocation from Metaspace is coupled to class loading.
+
+When a class is loaded and its runtime representation in the JVM is being prepared, Metaspace is allocated by its class loader to store the class’ metadata.
+
+**When does Metaspace get released?**
+
+The allocated Metaspace for a class is owned by its class loader 1. It is only released when that class loader itself is unloaded, not before.
+
+That in turn happens only after all classes loaded by this loader have no live instances anymore, and there are no references to these classes and its class loader, and a GC did run (see: https://docs.oracle.com/javase/specs/jls/se7/html/jls-12.html#jls-12.7[JLS 12.7. Unloading of Classes and Interfaces]).
+ 
+
+https://stuefe.de/posts/metaspace/what-is-metaspace/[what-is-metaspace]
+
+**Memory is often retained!**
+
+**"releasing Metaspace" does not necessarily mean that memory is returned to the OS**.
+
+All or a part of that memory may be retained within the JVM;it may bu reused for future class loading,but at the moment it remains unused within the JVM process.
+
+=== Metaspace Architecture
+
+metaspace implemented in layers
+
+- At the bottom, memory is allocated in large regions from the OS. 
+
+- At the middle, we carve those regions in no-so-large chunks and hand them over to class loaders
+
+- At the top, the class loaders  cut up those chunks to serve the caller code.
+
+==== The bottom layer : The space list
+
+memory for Metaspace is reserved and on demand committed from the OS via virtual memory calls like mmap(3). This happens in regions of 2MB size (on 64bit platforms).
+
+These mapped regions are kept as nodes in a global linked list named **VitualSpaceList**.
+
+Each node manages a high water mark, separating the committed space from the still uncommitted space. New pages are committed on demand, when allocations reach the high-water-mark. A little margin is kept to avoid too frequent calls into the OS.
+
+This goes on until the node is completely used up. Then, a new node is allocated and added to the list. The old node is getting “retired”1.
+
+Memory is allocated from a node in chunks called **MetaChunk**. They are come in three sizes named specialized, small and medium - naming is historic - typically 1K/4K/64K in size
+
+==== The middle layer : Metachunk
+
+When a class loader requests memory from metaspace for a piece of metadata, it will get a Metachunk instead - a piece of memory typically much larger than what was it requested. because **allocatng memory directly from the global VirtualSpaceList is expensive**.(VirtualSpaceLIst is a global structure and **needs locking**)
+
+**How does the Metaspace allocator decide how large a chunk to hand to the loader?**
+
+the rule(all rules based on **guesswork**)::
+
+- A freshly started standard loader will get small 4K chunks, until an arbitrary threshold is reached(4), at whitch the Metaspace allocator visibly looses patience and starts giving the loader larger 64K chunks.
+
+- the bootstrap classloader is known as a loader which tends loads alot of classes. So tie allocator gives it a massive chunk, right from the start(4M).
+
+- Reflection class loaders and class loaders for anonymous classes are known to load only one class each. So they are given very small(1K) chunks from the start  because the assumption is that they will stop needing Metaspace very soon and giving them andthing more would be waste.
+
+
+the guesswork: handing a loader more space than it presently needs under the assumption that it will need it very soon
+
+==== The upper layer : Metablock
+
+MetaBlock carves up the Metachunk into small allocation units. MetaBlock is actual units handed out to the caller(example : a Metablock houses one InstanceKlass).
+
+The lifetime of class metadata is bound to the class loader, it will be released in bulk when the class loader dies. So the JVM does not need to care about freeing random Metablocks.
+
+since the chunk is owned by one class loader, that portion can only ever be used by the same loader. If the loader stops loading classes, that space is effectively wasted.
+
+==== ClassloaderData and ClassLoaderMetaspace
+
+The class loader keeps its native representation in a native structure called **ClassLoaderData**.
+
+That structure **has** a reference to one **ClassLoaderMetaspace** structure which keeps a list of all Metachunks this loader has in use.
+
+**ClassloaderData != ClassLoaderMetaspace**
+
+==== Anonymous classes
+
+"Metaspace memory is owned by its class loader", but not for anonymous classes.
+
+When a loader loads an anonymous class, this class gets its own separate ClassLoaderData whose lifetime is coupled to that of the anonymous class instead of the housing  class loader. 
+
+That means that a class loader has a primary ClassLoaderData for all normal loaded classes, and secondary ClassLoaderData structures for each anonymous class(like Lambdas and Method handles).
+
+**When is memory returned to the OS**
+
+When all chunks whithin one VirtualSpaceListNode happen to be free, that node itself is removed. The node is removed from the VirtualSpaceList. Its free chunks are removed from the Metaspace freelist. The node is unmapped and its memory returned to the OS. the ndoe is purged.
+
+Because of a node has some chunks, and these chunks onwed by one or some class loaders, so if all chunks in a node is free, all class loaders owning those chunks must have died. 
+
+if these chunks are owned by different class loaders with different life spans, nothing will be freed. 
+
+Summary::
+
+- Memory is reserved from the OS in2MB-sized regions and kept in a global linked list. These regions are committed on demand.
+
+- These regions are carved into chunks, whitch are handed to chalss loaders. A chunk belongs to one class loader. 
+
+- The chunk is further carved into tiny allocations, called blocks. These are the allocaton units handed out to callers. 
+
+- When aloader deis, the chunks it owns are added to a global free list and reused. Part of the memory may be released to the OS, but that depends highly on fragmentation and luck.
+
+=== What is Compressed Class Space
+
+**Compressed Object Pointer and Compressed Class Pointers
+
+Compressed pointers are a way to reference data - objects in Java heap or class metadata in Metaspace - using 32bit reference even on a 64 bit platform.
+
+**advantage** : smaller pointer size resulting in reduced memory footprint and batter usage of cache.
+
+
+Each Java object has a reference to a native structure living outside the Java heap in Metaspace: the **Klass** structure.
+
+When using compressed class pointers, that reference is a 32bit value. In order to find the real 64bit address of that structure, we add a known common base to it, , and potentially also left-shift the value by three bits.
+
+That technique places a technical restriction on where to allocate those Klass structures::
+
+- Each possible location of a Klass structure must fall within a range of 4G (unshifted mode)|32G(shifted mode), to be reachable with a 32bit offset from a common base.
+
+- Both restrictions mean that we need to allocate the Metaspace as one contiguous region.
+
+split the metaspace into two parts::
+
+- The class part, housing Klass structures, has to be allocated as one contiguius region whitch cannot be larger than 32G.
+
+- The non-class part containing everything else, does not.
+
+CompressedClassSpaceSize defaults to 1GB, in hotspot is at 3GB max.
+
+Also note that we are always talking about virtual size, not comitted size. That memory is only committed when needed. Very simplified, virtual size on most modern Operating Systems costs almost nothing, it is just an addres space reservation.
+
+**Implementation**
+
+Global structures VirtualSpaceList and ChunkManager were all duplicated and now exist in two variants, "class space" variant and a "non-class space" variant.
+
+But since we need a contiguous address range for the class space, we cannot really use a chain of mapped regions; so the class space list is degenerated: it only contains a single node and cannot grow. That single node is gigantic compared to its brethren in the non-class list. That node is the compressed class space.
+
+-XX:+UseCompressedOops enables compressed object pointers.
+
+-XX:+UseCompressedClassPointers enables compressed class pointers.
+
+Both are on by default but can be switched off manually.
+
+-XX:+UseCompressedClassPointers requires -XX:+UseCompressedOops but not vice versa: one can run with compressed oops on without compressed class pointers.
+
+Note that compressed object pointers require Java heaps < 32G. So, if the Java heap is >= 32G, compressed oops will be switched off, which will also switch off compressed class pointers.
+
+== collector
+
+=== Garbage-First Garbage Collector
+
+https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/g1_gc.html#garbage_first_garbage_collection[Garbage-First Garbage Collector]
+
+**当G1收集器中，对象年龄到达最大阈值（默认15）时，下一次垃圾收集时，会发生什么？可回收与不可回收对象会经历什么？**
+
+=== Shenandoah Garbage Collector
+
+Brooks Pointers
+
+在对象头中增加一个引用字段，指向自己，当处于并发移动时，指向新对象。（额外开销比较大）
+
+存在并发问题
+
+1)收集器线程复制了新的对象副本;
+2)用户线程更新对象的某个字段;
+3)收集器线程更新转发指针的引用值为新副本地址。
+
+shenandoah 通过cas来保证并发时对象的访问正确性的。
+
+=== ZGC
+
+Linux/x86-64平台上的ZGC使用了多重映射(Multi-Mapping)将多个不同的虚拟内存地址映射到同一个物理内存地址上,这是一种多对一映射,意味着ZGC在虚拟内存中看到的地址空间要比实际的堆内存容量来得更大。把染色指针中的标志位看作是地址的分段符,那只要将这些不同的地址段都映射到同一个物理内存空间,经过多重映射转换后,就可以使用染色指针正常进行寻址了
+
+在某些场景下,多重映射技术确实可能会带来一些诸如复制大对象时会更容易这样的额外好处
+
+得益于染色指针的支持,ZGC收集器能仅从引用上就明确得知一个对象是否处于重分配集之中,如果用户线程此时并发访问了位于重分配集中的对象,这次访问将会被预置的内存屏障所截获,然后立即根据Region上的转发表记录将访问转发到新复制的对象上,并同时修正更新该引用的值,使其直接指向新对象,ZGC将这种行为称为指针的“自愈”(Self-Healing)能力
+
+这样做的好处是只有第一次访问旧对象会陷入转发,也就是只慢一次,对比Shenandoah的Brooks转发指针,那是每次对象访问都必须付出的固定开销,简单地说就是每次都慢,因此ZGC对用户程序的运行时负载要比Shenandoah来得更低一些
+
+还有另外一个直接的好处是由于染色指针的存在,一旦重分配集中某个Region的存活对象都复制完毕后,这个Region就可以立即释放用于新对象的分配(但是转发表还得留着不能释放掉),哪怕堆中还有很多指向这个对象的未更新指针也没有关系,这些旧指针一旦被使用,它们都是可以自愈的。
+
+并发重映射:重映射所做的就是修正整个堆中指向重分配集中旧对象的所有引用-并不是一个必须要“迫切”去完成的任务,ZGC很巧妙地把并发重映射阶段要做的工作,合并到了下一次垃圾收集循环中的并发标记阶段里去完成,反正它们都是要遍历所有对象的,这样合并就节省了一次遍历对象图的开销。
+
+ZGC的缺点（致命）：能承受的对象分配速率不会太高
+
+
+== Java运行参数
+
+语法：
+
+java [options] classname [args]
+
+java [options] -jar filename [args]
+
+Options
+
+The java command supports a wide range of options that can be divided into the following categories:
+
+- Standard Options
+
+- Non-Standard Options
+
+- Advanced Runtime Options
+
+- Advanced JIT Compiler Options
+
+- Advanced Serviceability Options
+
+- Advanced Garbage Collection Options
+
+non-standard options start with -X
+
+=== Standard Options
+
+These are the most commonly used options that are supported by all implementations of the JVM.
+
+-verbose:class::
+- Displays information about each loaded class.
+
+-showversion::
+- Displays version information and continues execution of the application
+
+-verbose:gc::
+- Displays information about each garbage collection (GC) event
+
+=== Non-Standard Options
+
+These options are general purpose options that are specific to the Java HotSpot Virtual Machine.
+
+-Xloggc:filename::
+- Sets the file to which verbose GC events information should be redirected for logging. The information written to this file is similar to the output of -verbose:gc with the time elapsed since the first GC event preceding each logged event. The -Xloggc option overrides -verbose:gc if both are given with the same java command
+
+-Xdiag::
+- Shows additional diagnostic messages.
+
+-Xfuture::
+- Enables strict class-file format checks that enforce close conformance to the class-file format specification. Developers are encouraged to use this flag when developing new code because the stricter checks will become the default in future releases.
+
+-Xinternalversion::
+- Displays more detailed JVM version information than the -version option, and then exits.
+
+-Xmnsize::
+- Sets the initial and maximum size (in bytes) of the heap for the young generation (nursery). Append the letter k or K to indicate kilobytes, m or M to indicate megabytes, g or G to indicate gigabytes.
+
+- The young generation region of the heap is used for new objects. GC is performed in this region more often than in other regions. If the size for the young generation is too small, then a lot of minor garbage collections will be performed. If the size is too large, then only full garbage collections will be performed, which can take a long time to complete. Oracle recommends that you keep the size for the young generation between a half and a quarter of the overall heap size.
+
+- Instead of the -Xmn option to set both the initial and maximum size of the heap for the young generation, you can use -XX:NewSize to set the initial size and -XX:MaxNewSize to set the maximum size.
+
+-Xmssize::
+- Sets the initial size (in bytes) of the heap. This value must be a multiple of 1024 and greater than 1 MB. Append the letter k or K to indicate kilobytes, m or M to indicate megabytes, g or G to indicate gigabytes.
+
+- If you do not set this option, then the initial size will be set as the sum of the sizes allocated for the old generation and the young generation. The initial size of the heap for the young generation can be set using the -Xmn option or the -XX:NewSize option.
+
+-Xmxsize::
+- Specifies the maximum size (in bytes) of the memory allocation pool in bytes. This value must be a multiple of 1024 and greater than 2 MB. Append the letter k or K to indicate kilobytes, m or M to indicate megabytes, g or G to indicate gigabytes. The default value is chosen at runtime based on system configuration. For server deployments, -Xms and -Xmx are often set to the same value. See the section "Ergonomics" in Java SE HotSpot Virtual Machine Garbage Collection Tuning Guide at http://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/index.html.
+- The -Xmx option is equivalent to -XX:MaxHeapSize.
+
+-Xnoclassgc::
+- Disables garbage collection (GC) of classes. This can save some GC time, which shortens interruptions during the application run.
+
+- When you specify -Xnoclassgc at startup, the class objects in the application will be left untouched during GC and will always be considered live. This can result in more memory being permanently occupied which, if not used carefully, will throw an out of memory exception.
+
+-Xprof::
+- Profiles the running program and sends profiling data to standard output. This option is provided as a utility that is useful in program development and is not intended to be used in production systems.
+
+-XshowSettings:category::
+- Shows settings and continues. Possible category arguments for this option include the following:all/locale/properties/vm
+
+-Xsssize::
+- Sets the thread stack size (in bytes). Append the letter k or K to indicate KB, m or M to indicate MB, g or G to indicate GB. The default value depends on the platform:Linux/ARM (32-bit): 320 KB/Linux/i386 (32-bit): 320 KB/Linux/x64 (64-bit): 1024 KB/OS X (64-bit): 1024 KB/Oracle Solaris/i386 (32-bit): 320 KB/Oracle Solaris/x64 (64-bit): 1024 KB
+
+- This option is equivalent to -XX:ThreadStackSize.
+
+=== Advanced Runtime Options
+
+=== Advanced Garbage Collection Options
+
+These options control how garbage collection (GC) is performed by the Java HotSpot VM
+
+-XX:+PrintGCDateStamps::
+- Enables printing of a date stamp at every GC. By default, this option is disabled.
+
+-XX:+PrintGCDetails::
+- Enables printing of detailed messages at every GC. By default, this option is disabled.
+
+-XX:+PrintHeapAtGC::
+- 查看GC前后的堆、方法区可用容量变化（G1:heap metaspace）
+
+-XX:+PrintAdaptiveSizePolicy::
+- 查看收集器Ergonomics机制（自动设置堆空间各分代区域大小、收集目标等内容）
+
+-XX:+PrintTenuringDistribution::
+- 查看熬过收集后剩余对象的年龄分布信息
+
+=== other
+
+写入gc日志到文件：-Xloggc:/home/gc.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps
+
+By default, the JVM compiles the method as a background task, running the method in interpreter mode until the background compilation is finished. The -Xbatch flag disables background compilation so that compilation of all methods proceeds as a foreground task until completed.
+
+the Client VM (-client) performs 1,000 interpreted method invocations and the Server VM (-server) performs 10,000 interpreted method invocations to gather information for efficient compilation. Specifying the -Xcomp option disables interpreted method invocations to increase compilation performance at the expense of efficiency.
+
+
+
+https://docs.oracle.com/javase/8/docs/technotes/tools/unix/java.html
+
+== tools
+
+=== jps
+
+虚拟机进程状况工具
+
+jps [ options ] [ hostid ]
+
+image::resource\jps选项参数.png[]
+
+
+=== jstat
+
+虚拟机统计信息监控工具
+
+jstat [ option vmid [interval[s|ms] [count]] ]
+
+https://docs.oracle.com/javase/8/docs/technotes/tools/unix/jstat.html
+
+容量单位一般为kb
+
+jstat -gccapcaty
+
+mc为原空间提交大小metaspace commited，而不是metaspace capcaty，oracle官方的doc描述有问题，bug在jdk9修复（未验证）
+https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8077987
+
+jdk8中不是很好用，很多cmx，cmn都是相同的，没有意义的值
+
+image::resource\jstat选项参数.png[]
+
+=== jinfo(Configuration Info for Java)
+
+java配置信息工具
+
+jdk8 貌似只有jinfo -flag 查看有用
+image::resource\jinfo.png[]
+
+=== gc log
+
+[15,651s][info ][gc] GC(36) Pause Young (G1 Evacuation Pause) 239M->57M(307M) (15,646s, 15,651s) 5,048ms
+
+[16,162s][info ][gc] GC(37) Pause Young (G1 Evacuation Pause) 238M->57M(307M) (16,146s, 16,162s) 16,565ms
+
+[16,367s][info ][gc] GC(38) Pause Full (System.gc()) 69M->31M(104M) (16,202s, 16,367s) 164,581ms
+
+The output shows two young collections followed by a full collection that was initiated by the application with a call to System.gc(). The lines start with a time stamp indicating the time from when the application was started. Next comes information about the log level (info) and tag (gc) for this line. This is followed by a GC identification number. In this case, there are three GCs with the numbers 36, 37, and 38. Then the type of GC and the cause for stating the GC is logged. After this, some information about the memory consumption is logged. That log uses the format "used before GC" -> "used after GC" ("heap size").
+
+In the first line of the example this is 239M->57M(307M), which means that 239 MB were used before the GC and the GC cleared up most of that memory, but 57 MB survived. The heap size is 307 MB. Note in this example that the full GC shrinks the heap from 307 MB to 104 MB. After the memory usage information, the start and end times for the GC are logged as well as the duration (end - start).

@@ -93,9 +93,10 @@ TIP: 如何减小堆内存占用？减小MaxHeapFreeRatio
 
 但在给定的Xmx下，老年代就要减小，可能增加老年代的gc频率，最佳方案要根据分配对象的生命周期确定
 
-== The Mostly Concurrent Collectors(通常并发收集器？)
 
-The mostly concurrent collectors perform parts of their work concurrently to the application, hence their name.
+
+
+== 并发收集器(The Mostly Concurrent Collectors)
 
 收集器与应用程序并发的执行部分工作，因此得名。
 
@@ -103,18 +104,146 @@ The mostly concurrent collectors perform parts of their work concurrently to the
 
 - G1
 
-The mostly concurrent collector trades processor resources (which would otherwise be available to the application) for shorter major collection pause time.
-
-收集器用处理器资源(app使用的)换取更短暂的major collection pause time。
+收集器用处理器资源(app使用的)换取更短暂的暂停时间（major collection pause time）。
 
 并发收集器的开销::
 
 - 主要开销是并发收集部分，会使用更多的处理器资源。
 
-- 开启并发也会有额外的开销。（这里通常导致并发收集器的停顿时间虽然短，但是吞吐量也往往比其他收集器低）
+- 开启并发也会有额外的开销。（这里通常导致并发收集器的停顿时间虽然短，但是吞吐量也往往比其他收集器低）。
 
 在多核处理器上，app线程在整个并发收集阶段都是可获得cpu的，因为垃圾收集线程并不会暂停app。结果通常是停顿时间短，但是更少的处理器资源被用于app，app会减速（吞吐量降低）
 
-由于在并发阶段，最少有一个处理器被用于垃圾收集，
+由于在并发阶段，最少有一个处理器被用于垃圾收集，并发收集器通常不能让单处理器（1个核心）的机器受益
 
 === G1
+
+==== 介绍
+
+G1收集器是为多核、大内存的机器设计的，G1要达到的目标是：几乎不需要配置，使当前应用程序，高概率的达到暂停时间目标，同时达到高吞吐量。在延迟与吞吐量之间达到最佳的平衡。
+
+G1在jdk9中成为默认收集器
+
+G1的特点::
+
+- 堆空间支持到10GB或更大，超过50%的堆空间中是存活数据。
+
+- 随着时间推移，对象分配和晋升的比例会发生显著变化。
+
+- 不超过几百毫秒的可预测暂停时间，避免长时间的暂停。
+
+=== 基本概念
+
+**下定义**
+
+G1 is a generational, incremental, parallel, mostly concurrent, stop-the-world, and evacuating garbage collector which monitors pause-time goals in each of the stop-the-world pauses. 
+
+和其他收集器一样，G1将堆划分为年轻代和老年代，空间回收主要集中在年轻代，偶尔发生在老年代。
+
+为了提高吞吐量，一些操作总是stw，从需要应用程序静止很长时间的操作，与app并行、并发执行。
+
+为保持stw时间短暂，G1增量、分步、并行、执行垃圾回收。
+
+G1通过追踪app以前的行为和gc停顿为相关成本建模，实现可预测性。
+
+G1通过这些信息来确定在暂停中完成的工作的大小（size）
+
+G1通过疏散（evacuation）回收空间。在被选择的回收区域中找到或对象，复制到新的内存区域（标记复制），在这个过程中压缩对象的总占用空间。在疏散完成后，之前被占用活对象占用的空间将被重新用于应用程序分配。
+
+=== 堆布局
+
+G1将堆划分为一组相同尺寸的region，每一段连续的虚拟内存空间都像下图这样。region是内存分配和回收的单位。在任何时间，这些region可以是空的，或者被指定一个特定的分代（年轻代/老年代）。当有内存请求时，G1的内存管理机制会先给一些空闲的region指定分代，然后将它们分发给app，app可以自己控制这些region内部空间的分配。
+
+
+image::jvm\G1_heap_layout.png[G1 heap layout]
+
+图解析::
+
+. 灰色区域代表空的region
+
+. 红色区域代表年轻代region，普通红色代表eden region，带有S的红色代表survivor region。
+
+. 蓝色区域代表老年代，带有H的蓝色代表存放大对象的老年代。
+
+
+ 在其他收集器中，eden、servivor、old通常使用连续虚拟内存空间，在G1中，这些区域通常不采用连续的布局模式。
+
+ 内存管理机制总是将年轻代的eden region分配给app，特例是大对象将直接分配到老年代。
+ 
+ G1垃圾收集暂停可以回收整个年轻代，并且额外回收部分老年代
+ 
+ G1将会收集合中的活对象分配到一个或多个不同的空region，整个年轻代将被分复制到survivor或者old，old到其他old。
+
+=== 垃圾收集循环（garbage collection cycle）
+
+从较高的层面看，G1在两个阶段中交替::
+
+- young-only phase：只回收年轻代，这会导致堆中老年代region的比例变大。
+
+- space-reclamation phase：除了回收年轻代，G1还会增量的回收老年代。
+
+
+image::G1_garbage_collectio_cycle.png[]
+
+young-only phase::
+
+* 这个阶段从几次Normal young collections开始（Pause Young (Normal) (G1 Evacuation Pause)）。对象不断进入老年代，当老年代占比达到一定阈值（Initiating Heap Occupancy threshold）时，开始从young-only过渡到space-reclamation。这时，G1安排一次Concurrent Start young collection代替一次Normal young collection。
+
+** Concurrent Start：在执行一次Normal young collection的基础上，额外启动标记过程（marking process）。并发（concurrent marking）标记确定所有老年代中当前可达的对象，用于在space-reclamation phase保留它们。在并发标记过程中，可能同时发生Normal young collection。标记过程（marking processmarking process）中有两次stw停顿：remark、cleanup。
+
+*** remark：这次停顿结束标记过程，执行全局引用处理和类卸载。回收空region、清理内部数据结构。在remark和cleanup之间，G1计算一些信息（以便于在之后能够并发的回收空闲的老年代区域），这个过程在cleanup停顿中结束。
+
+*** cleanup：这次停顿决定是否将要进入space-reclamation phase。如果将要进入space-reclamation phase，young-only phase将已一次Prepare Mixed young collection结束。
+
+space-reclamation phase::
+
+* 这个阶段由多个Mixed collection组成，Mixed collection同时疏散（evacuate）年轻代和老年代有对象存活的region。当G1认为疏散更多老年代region不能产生足够多的空闲空间时，space-reclamation phase结束。
+
+space-reclamation phase结束后，收集循环将重新由一次young-only phase开始。
+
+如果在收集活动信息时发生oom，G1将直接执行一次Full GC。
+
+=== G1内部细节
+
+* 确定IHOP
+
+Initiating Heap Occupancy Percent (IHOP) 是触发初始标记收集的阈值，定义为老年代大小的百分比。
+
+默认情况下，G1通过观察标记周期中标记任务所需的时间和老年代分配多少内存来自动确定最佳的IHOP。这个特性被成为Adaptive IHOP。当没有足够的观察数据能用来很好的预测IHOP时，会使用-XX:InitiatingHeapOccupancyPercent设置的值。可以使用-XX:-G1UseAdaptiveIHOP关闭Adaptive IHOP
+
+* 标记（marking）
+
+G1 标记使用**Snapshot-At-The-Beginning (SATB)**算法。在Initial Mark停顿时，G1获得一个虚拟的对快照。在标记开始时，所有活对象将在剩下的标记过程中被认为是存活的。这意味着在标记过程中死亡的对象为了空间回收的目的仍然被认为是活的（有一些例外）。这可能错误的保留一些额外的内存空间。但是SATB潜在的减少了remark阶段的停顿时间。这些对象将在下一次marking过程中被回收。
+
+* 在非常密集堆情景下的行为
+
+当应用程序持有大量的活动内存区域，G1疏散不能找到足够的空间去复制对象，就会发生**evacuation failure**。evacuation failure意味着G1只能尽力去完成当这次垃圾收集：将所有已经移动的对象保存在新位置。不复制任何尚未移动的对象，只调整对象之间的引用。evacuation failure可能导致一些额外的开销，但通常应该和其他年轻代收集一样快。在这次垃圾收集之后，G1将不采取任何其他措施，直接恢复应用程序。G1假设疏散失败发生在垃圾收集接近结束时;也就是说，大多数对象已经被移动，并且有足够的空间继续运行app，直到标记完成和空间回收开始。如果假设不成立（没有足够的空间运行app），回发生一次Full GC。
+
+* 大对象
+
+大对象：object size >= (region size) / 2
+
+通过-XX:G1HeapRegionSize设置region size
+
+大对象会被特殊处理::
+
+- 大对象会被分配到老年代的一系列连续region。对象的起始地址是这一系列region中第一个region的起始地址。最后一个region中的剩余空间不会再被分配，知道这个对象被回收。
+
+在大对象多的情况下，要适当调整region size。例如regionsize=10m，有大量object size = 7m的对象。
+
+通常大对象只能在marking阶段结束时的cleanup pause中被回收（或者Full GC）。
+
+但是对于基本类型的数组，如果没有被很多对象应用，G1将适时的尝试去回收数组对象（可能在任何一种垃圾收集停顿时发生）。通过-XX:G1EagerReclaimHumongousObjects.关闭。
+
+分配大对象可能导致提前发生垃圾收集暂停。在每次大对象分配时，G1会检查IHOP，如果超出，就会立刻强制发生一次initial mark young collection
+
+The humongous objects never move, not even during a Full GC. This can cause premature slow Full GCs or unexpected out-of-memory conditions with lots of free space left due to fragmentation of the region space.
+巨大的对象永远不会移动，即使在完整的GC过程中也是如此。这可能会导致过早的缓慢的全GCs或由于区域空间的碎片化而留下大量空闲空间的意外内存不足情况。
+
+大对象不会被移动，即使在Full GC中。这可能导致发生Full GC和意想不到的oom。
+
+
+
+=== G1实现了高性能，G1通过哪些方法去达到暂停时间目标？
+
+已分步、并行的方式增量的进行垃圾回收
