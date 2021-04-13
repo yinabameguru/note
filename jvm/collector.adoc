@@ -305,5 +305,108 @@ space-reclamation phase阶段预期的gc次数，默认是8次
 
 以分步、并行的方式增量的进行垃圾回收
 
+* 从 CMS 或者 ParallelOldGC迁移到G1，jvm进程可能会占用更多的内存。因为G1内部使用了一些"accounting" data structures(例如 Remembered Sets and Collection Sets)。
+
+* Remembered Sets: 追踪region中对象的引用，每个region拥有一个Remembered Set。
+
+* Collection Sets: 将在gc中被回收的region的集合。Collection Sets中的所有活对象将在一次gc中被疏散。
+
 参考：
 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector.html#GUID-ED3AB6D3-FD9B-4447-9EDF-983ED2F7A573[Garbage-First Garbage Collector]
+
+https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html[Getting Started with the G1 Garbage Collector]
+
+== CMS
+
+=== CMS Collection Phases
+
+. **Initial Mark(STW)**: 标记老年代中，直接被年轻代对象引用的可达对象。停顿时间通常比minor collection pause短
+
+. **Concurrent Marking**: 与app并发，遍历老年代对象图。用Initial Mark阶段标记的老年代对象作为root，遍历标记所有可达的老年代对象。在2、3、5阶段中分配和晋升的对象都将直接被标记为活跃。
+
+. **Remark(STW)**: 标记在Concurrent Marking阶段由于app运行导致对象更新，被遗漏的对象。
+
+== CMS
+
+=== CMS Collection Phases
+
+. **Initial Mark(STW)**: 标记老年代中，直接被年轻代对象引用的可达对象。停顿时间通常比minor collection pause短
+
+. **Concurrent Marking**: 与app并发，遍历老年代对象图。用Initial Mark阶段标记的老年代对象作为root，遍历标记所有可达的老年代对象。在2、3、5阶段中分配和晋升的对象都将直接被标记为活跃。
+
+. **Remark(STW)**: 标记在Concurrent Marking阶段由于app运行导致对象更新，被遗漏的对象。
+
+. **Concurrent Sweep**: 回收在marking阶段被认为不可达的对象（注意 这里不可达对象不是被标记的对象）。不可达对象集合的空间会被添加到一个free list用于之后分配。不可达对象空间合并也发生在这里。注意：**活对象不会被移动，会导致碎片化，直到Full GC发生**
+
+. **Resetting**: 清理vm内部的数据结果，为下一次concurrent collection做准备
+
+=== Reviewing CMS Step By Step
+
+. CMS的堆结构
+
+年轻代被分为一个Eden和两个survivor。老年代是一块连续的虚拟内存空间。GC在适当的位置发生。直到Full GC发生才会整理老年代。
+
+image::CMS_heap_structure.png[CMS_heap_structure]
+
+. young GC如何与CMS一起工作
+
+如果app已经运行了一段时间，堆空间可能入下图，对象分散在老年代。存活的老年代对象不会被移动，新的老年代对象会被分配到适当的位置。
+
+. 年轻代回收
+
+活对象从Eden、survivor复制到另一个survivor。达到年龄阈值的对象将晋升到老年代。
+
+image::young_generation_collection.png[young_generation_collection]
+
+. 年轻代回收之后
+
+Enen和其中一个survivor将会被清空
+
+image::after_young_gc.png[after_young_gc]
+
+. CMS的老年代回收
+
+当老年代达到一定使用率后，CMS被触发（包含initial mark、remark两个STW阶段）。
+
+initial mark阶段短暂停顿，标记年轻代可达的老年代对象。
+
+concurrent marking阶段，与app并发进行，标记出活对象。
+
+remark阶段标记出concurrent marking阶段遗漏的对象。
+
+image::old_gen_collection_in_CMS.png[old_gen_collection_in_CMS]
+
+. Concurrent Sweep
+
+没有被标记的对象会被清理。不会整理老年代
+
+未标记对象 == 死亡对象
+
+. After Sweeping
+
+image::old_gen_collection-concurrent_sweep.png[old_gen_collection-concurrent_sweep]
+
+sweeping phase之后，很多内存被释放，也会发现多了很多的碎片空间
+
+最后CMS会经过resetting阶段，等待下一次
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
