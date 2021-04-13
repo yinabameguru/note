@@ -378,3 +378,10 @@ image::resource\jinfo.png[]
 The output shows two young collections followed by a full collection that was initiated by the application with a call to System.gc(). The lines start with a time stamp indicating the time from when the application was started. Next comes information about the log level (info) and tag (gc) for this line. This is followed by a GC identification number. In this case, there are three GCs with the numbers 36, 37, and 38. Then the type of GC and the cause for stating the GC is logged. After this, some information about the memory consumption is logged. That log uses the format "used before GC" -> "used after GC" ("heap size").
 
 In the first line of the example this is 239M->57M(307M), which means that 239 MB were used before the GC and the GC cleared up most of that memory, but 57 MB survived. The heap size is 307 MB. Note in this example that the full GC shrinks the heap from 307 MB to 104 MB. After the memory usage information, the start and end times for the GC are logged as well as the duration (end - start).
+
+
+== hotspot JVM架构
+
+主要组件是class loader、runti data areas、execution engine。其中与性能相关的是heap、JIT编译器、GC
+
+image::hotspot_architecture.png[hotspot_architecture]
