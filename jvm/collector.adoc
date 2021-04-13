@@ -3,7 +3,7 @@
 参考文档：
 https://docs.oracle.com/en/java/javase/11/gctuning/introduction-garbage-collection-tuning.html#GUID-326EB4CF-8C8C-4267-8355-21AB04F0D304[Garbage Collection Tuning]     https://docs.oracle.com/en/java/javase/11/vm/java-virtual-machine-technology-overview.html#GUID-982B244A-9B01-479A-8651-CB6475019281[Java Virtual Machine Guide]
 
-== 什么是垃圾收集器
+= 什么是垃圾收集器
 
 可以理解为memory manager——应用程序的内存管理者
 
@@ -21,12 +21,12 @@ https://docs.oracle.com/en/java/javase/11/gctuning/introduction-garbage-collecti
 
 基于垃圾收集器管理内存的应用程序，在操作系统上的内存分配模型如下图：
 
-image::resource\gc管理的应用的内存模型.png[width="300", height="200"]
+image::../resource/gc管理的应用的内存模型.png[width="300", height="200"]
 
 内存管理流程：
 
 
-== 垃圾收集器关注的指标
+= 垃圾收集器关注的指标
 
 最大暂停时间、吞吐量、内存占用量
 
@@ -37,7 +37,7 @@ image::resource\gc管理的应用的内存模型.png[width="300", height="200"]
 垃圾收集器中维护着这样一个动态循环：当满足最大暂停时间和吞吐量指标时，虚拟机会缩小堆，直到无法满足其中一个指标。
 
 
-image::resource\虚拟机堆内存动态管理.png[width="300", height="200"] 
+image::../resource/虚拟机堆内存动态管理.png[width="300", height="200"] 
 
 TIP: 由于jvm会动态调整堆的大小，尽量不要给堆设置最大值，可能会影响到性能。除非要设置比默认值更大的堆（默认是物理内存的1/4）
 
@@ -47,7 +47,7 @@ TIP: 这里还需要考虑到硬件性能，目前的大内存延迟会有比较
 
 TIP: 有些人认为Web服务器的正确度量标准是吞吐量，因为垃圾回收期间的暂停可能是可以容忍的，或者可能被网络等待时间掩盖了，但目前的虚拟机发展好像是朝着低延迟方向的，这里似乎还有争论
 
-== 分代垃圾收集
+= 分代垃圾收集
 
 简单的串行收集器：暂停用户线程，扫描存活对象，清理死亡对象。
 
@@ -59,7 +59,7 @@ TIP: 有些人认为Web服务器的正确度量标准是吞吐量，因为垃圾
 
 **分代垃圾收集器**
 
-image::resource\jsgct_dt_006_prm_gn_sz_new.png[]
+image::../resource/jsgct_dt_006_prm_gn_sz_new.png[]
 
 初始化时，vm向操作系统申请Xmx大小的连续虚拟内存地址空间，按-XX: NewRatio=nnn，分配给年轻代和老年代。年轻代按-XX: SurvivorRatio=nnn，将年轻代分为1个eden和2个survivor
 
@@ -75,7 +75,7 @@ TIP: 大对象直接到老年代
 
 
 
-== 影响gc性能的两个主要因素：Xmx、NewRatio
+= 影响gc性能的两个主要因素：Xmx、NewRatio
 
 
 **Xmx**
@@ -96,7 +96,7 @@ TIP: 如何减小堆内存占用？减小MaxHeapFreeRatio
 
 
 
-== 并发收集器(The Mostly Concurrent Collectors)
+= 并发收集器(The Mostly Concurrent Collectors)
 
 收集器与应用程序并发的执行部分工作，因此得名。
 
@@ -116,9 +116,9 @@ TIP: 如何减小堆内存占用？减小MaxHeapFreeRatio
 
 由于在并发阶段，最少有一个处理器被用于垃圾收集，并发收集器通常不能让单处理器（1个核心）的机器受益
 
-=== G1
+== G1
 
-==== 介绍
+=== 介绍
 
 G1收集器是为多核、大内存的机器设计的，G1要达到的目标是：几乎不需要配置，使当前应用程序，高概率的达到暂停时间目标，同时达到高吞吐量。在延迟与吞吐量之间达到最佳的平衡。
 
@@ -140,22 +140,20 @@ G1 is a generational, incremental, parallel, mostly concurrent, stop-the-world, 
 
 和其他收集器一样，G1将堆划分为年轻代和老年代，空间回收主要集中在年轻代，偶尔发生在老年代。
 
-为了提高吞吐量，一些操作总是stw，从需要应用程序静止很长时间的操作，与app并行、并发执行。
+为了提高吞吐量，一些操作总是stw。为了缩短stw，另外一些操作与app并行、并发执行（例如 global marking）。
 
-为保持stw时间短暂，G1增量、分步、并行、执行垃圾回收。
+为保持stw时间短暂，G1增量、分步、并行的执行垃圾回收。
 
-G1通过追踪app以前的行为和gc停顿为相关成本建模，实现可预测性。
+G1通过追踪app以前的行为和gc停顿为相关成本建模，实现可预测性。G1通过这些信息规划在暂停时完成的工作。
 
-G1通过这些信息来确定在暂停中完成的工作的大小（size）
-
-G1通过疏散（evacuation）回收空间。在被选择的回收区域中找到或对象，复制到新的内存区域（标记复制），在这个过程中压缩对象的总占用空间。在疏散完成后，之前被占用活对象占用的空间将被重新用于应用程序分配。
+G1通过疏散（evacuation）回收空间。在被选择的回收区域中找到活对象，复制到新的内存区域（标记复制），在这个过程中压缩对象的总占用空间。在疏散完成后，之前被占用活对象占用的空间将被重新用于应用程序分配。
 
 === 堆布局
 
 G1将堆划分为一组相同尺寸的region，每一段连续的虚拟内存空间都像下图这样。region是内存分配和回收的单位。在任何时间，这些region可以是空的，或者被指定一个特定的分代（年轻代/老年代）。当有内存请求时，G1的内存管理机制会先给一些空闲的region指定分代，然后将它们分发给app，app可以自己控制这些region内部空间的分配。
 
 
-image::jvm\G1_heap_layout.png[G1 heap layout]
+image::G1_heap_layout.png[G1 heap layout]
 
 图解析::
 
@@ -166,13 +164,13 @@ image::jvm\G1_heap_layout.png[G1 heap layout]
 . 蓝色区域代表老年代，带有H的蓝色代表存放大对象的老年代。
 
 
- 在其他收集器中，eden、servivor、old通常使用连续虚拟内存空间，在G1中，这些区域通常不采用连续的布局模式。
+在其他收集器中，eden、servivor、old通常使用连续虚拟内存空间，在G1中，这些区域通常不采用连续的布局模式。
 
- 内存管理机制总是将年轻代的eden region分配给app，特例是大对象将直接分配到老年代。
+内存管理机制总是将年轻代的eden region分配给app，特例是大对象将直接分配到老年代。
  
- G1垃圾收集暂停可以回收整个年轻代，并且额外回收部分老年代
+G1垃圾收集暂停可以回收整个年轻代，并且额外回收部分老年代
  
- G1将会收集合中的活对象分配到一个或多个不同的空region，整个年轻代将被分复制到survivor或者old，old到其他old。
+G1将collection set中的活对象分配到一个或多个不同的空region，整个年轻代将被复制到survivor或者old，old到其他old。
 
 === 垃圾收集循环（garbage collection cycle）
 
@@ -201,7 +199,7 @@ space-reclamation phase::
 
 space-reclamation phase结束后，收集循环将重新由一次young-only phase开始。
 
-如果在收集活动信息时发生oom，G1将直接执行一次Full GC。
+如果在收集活动信息时（标记阶段）发生oom，G1将直接执行一次Full GC。
 
 === G1内部细节
 
@@ -213,11 +211,16 @@ Initiating Heap Occupancy Percent (IHOP) 是触发初始标记收集的阈值，
 
 * 标记（marking）
 
-G1 标记使用**Snapshot-At-The-Beginning (SATB)**算法。在Initial Mark停顿时，G1获得一个虚拟的对快照。在标记开始时，所有活对象将在剩下的标记过程中被认为是存活的。这意味着在标记过程中死亡的对象为了空间回收的目的仍然被认为是活的（有一些例外）。这可能错误的保留一些额外的内存空间。但是SATB潜在的减少了remark阶段的停顿时间。这些对象将在下一次marking过程中被回收。
+G1 标记使用**Snapshot-At-The-Beginning (SATB)**算法。在Initial Mark停顿时，G1获得一个虚拟的堆快照。在标记开始时，所有活对象将在剩下的标记过程中被认为是存活的。这意味着在标记过程中死亡的对象为了空间回收的目的仍然被认为是活的（有一些例外）。这可能错误的保留一些额外的内存空间。但是SATB潜在的减少了remark阶段的停顿时间。这些对象将在下一次marking过程中被回收。
+
+关于marking，详见 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A[Garbage-First Garbage Collector Tuning]
 
 * 在非常密集堆情景下的行为
 
-当应用程序持有大量的活动内存区域，G1疏散不能找到足够的空间去复制对象，就会发生**evacuation failure**。evacuation failure意味着G1只能尽力去完成当这次垃圾收集：将所有已经移动的对象保存在新位置。不复制任何尚未移动的对象，只调整对象之间的引用。evacuation failure可能导致一些额外的开销，但通常应该和其他年轻代收集一样快。在这次垃圾收集之后，G1将不采取任何其他措施，直接恢复应用程序。G1假设疏散失败发生在垃圾收集接近结束时;也就是说，大多数对象已经被移动，并且有足够的空间继续运行app，直到标记完成和空间回收开始。如果假设不成立（没有足够的空间运行app），回发生一次Full GC。
+当应用程序持有大量的活动内存区域，G1疏散不能找到足够的空间去复制对象，就会发生**evacuation failure**。evacuation failure意味着G1只能尽力去完成当这次垃圾收集：将所有已经移动的对象保存在新位置。不复制任何尚未移动的对象，只调整对象之间的引用。evacuation failure可能导致一些额外的开销，但通常应该和其他年轻代收集一样快。在这次垃圾收集之后，G1将不采取任何其他措施，直接恢复应用程序。G1假设疏散失败发生在垃圾收集接近结束时;也就是说，大多数对象已经被移动，并且有足够的空间继续运行app，直到marking完成，space-reclamation 阶段开始。如果假设不成立（没有足够的空间运行app），会发生一次Full GC。
+
+关于 evacuation failure、提前触发的Full GC
+详见 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A[Garbage-First Garbage Collector Tuning]
 
 * 大对象
 
@@ -227,23 +230,80 @@ G1 标记使用**Snapshot-At-The-Beginning (SATB)**算法。在Initial Mark停�
 
 大对象会被特殊处理::
 
-- 大对象会被分配到老年代的一系列连续region。对象的起始地址是这一系列region中第一个region的起始地址。最后一个region中的剩余空间不会再被分配，知道这个对象被回收。
+- 大对象会被分配到老年代的一系列连续region。对象的起始地址是这一系列region中第一个region的起始地址。最后一个region中的剩余空间不会再被分配，直到这个对象被回收。
 
-在大对象多的情况下，要适当调整region size。例如regionsize=10m，有大量object size = 7m的对象。
+- 在大对象多的情况下，要适当调整region size。例如region size = 16m，有大量object size = 10m的对象，会导致大量的空间浪费
 
-通常大对象只能在marking阶段结束时的cleanup pause中被回收（或者Full GC）。
+- 通常大对象只能在marking阶段结束时的cleanup pause中被回收（或者Full GC）。
 
-但是对于基本类型的数组，如果没有被很多对象应用，G1将适时的尝试去回收数组对象（可能在任何一种垃圾收集停顿时发生）。通过-XX:G1EagerReclaimHumongousObjects.关闭。
+- 但是对于基本类型的数组，如果没有被很多对象应用，G1将适时的尝试去回收数组对象（可能在任何一种垃圾收集停顿时发生）。通过-XX:G1EagerReclaimHumongousObjects.关闭。
 
-分配大对象可能导致提前发生垃圾收集暂停。在每次大对象分配时，G1会检查IHOP，如果超出，就会立刻强制发生一次initial mark young collection
+- 分配大对象可能导致提前发生垃圾收集暂停。在每次大对象分配时，G1会检查IHOP，如果超出，就会立刻强制发生一次initial mark young collection
 
-The humongous objects never move, not even during a Full GC. This can cause premature slow Full GCs or unexpected out-of-memory conditions with lots of free space left due to fragmentation of the region space.
-巨大的对象永远不会移动，即使在完整的GC过程中也是如此。这可能会导致过早的缓慢的全GCs或由于区域空间的碎片化而留下大量空闲空间的意外内存不足情况。
+- 大对象不会被移动，即使在Full GC中。这可能导致过早发生Full GC、又碎片化内存引起的意想不到的oom。
 
-大对象不会被移动，即使在Full GC中。这可能导致发生Full GC和意想不到的oom。
+[%hardbreaks]
+
+* Young-Only Phase 分代大小调整
+
+在young-only阶段，collection set只由年轻代的region组成。G1总是在normal young collection结束后（会有对象进入到老年代）重新衡量年轻代，观测指标IHOP，判断是否进入到下一阶段。这个阶段，G1将根据对实际暂停时间的长期观察，去达到暂停时间目标（通过-XX:MaxGCPauseTimeMillis、-XX:PauseTimeIntervalMillis设置）。
+
+G1在-XX:G1NewSizePercent、-XX:G1MaxNewSizePercent 这两个值之间调整年轻代大小，以达到暂停时间目标。
+
+关于 如何处理long pause
+详见 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A[Garbage-First Garbage Collector Tuning]
+
+Space-Reclamation Phase 分代大小调整
+
+在space-reclamation阶段，G1尝试在一次暂停中最大化的回收老年代空间。
+
+年轻代会被调整到最小值（-XX:G1NewSizePercent），在G1认为添加更多的region将超出停顿时间目标之前，所有的需要回收的老年代region都将被添加到collection set candidates。在一次特定的停顿中，G1将根据回收效率和剩余时间，从集合中获得最终回收的collection set。
+
+(collection set candidates) / XX:G1MixedGCCountTarget（阶段中执行mixedGC回收的最大次数） 得出每次gc回收老年代region的数量。collection set candidates的最大值，要低于-XX:G1MixedGCLiveThresholdPercent
+
+当collection set candidates中可以被回收的剩余空间小于-XX:G1HeapWastePercent时，Space-Reclamation Phase结束。
+
+=== 一些参数的默认值
 
 
+-XX:MaxGCPauseMillis=200::
+最大停顿时间目标
+
+-XX:GCPauseTimeInterval=<ergo>::
+最大暂停间隔目标，没有默认值，允许G1在极端情况时候连续发生gc
+
+-XX:ParallelGCThreads=<ergo>::
+gc停顿时候的最大并行线程数，当进程可以使用的cpu线程数小于等于8时，等于可使用线程数，大于8时：8 + （可使用线程数 - 8） * （5 / 8）。在每次gc停顿开始时候，gc线程的最大并行线程数量会进一步受到-XX:HeapSizePerGCThread（每xxx的堆空间提供一个gc线程）限制，线程数不会超过 总堆 / HeapSizePerGCThread。
+
+
+-XX:ConcGCThreads=<ergo> ::
+最大并发gc线程数，默认是-XX:ParallelGCThreads / 4
+
+-XX:+G1UseAdaptiveIHOP -XX:InitiatingHeapOccupancyPercent=45::
+使用自适应IHOP，默认开启。在前几个collection cycle（没有足够多的观测数据） G1用老年代占45%作为阈值。
+
+-XX:G1HeapRegionSize=<ergo> ::
+设置region的大小，默认结果是堆大约包含2048个region（默认算法startingHeapSize/2048），region size可以在1MB-32MB之间调整，必须是2的次幂
+
+-XX:G1NewSizePercent=5 -XX:G1MaxNewSizePercent=60::
+年轻代空间范围 (G1NewSizePercent, G1MaxNewSizePercent)，默认(5,60)
+
+-XX:G1HeapWastePercent=5::
+允许不回收的collection set candidates占总堆的比率，默认如果collection set candidates占堆的比率小于5%，就会结束space-reclamation phase，不会执行mixed gc
+
+-XX:G1MixedGCCountTarget=8::
+space-reclamation phase阶段预期的gc次数，默认是8次
+
+
+-XX:G1MixedGCLiveThresholdPercent=85::
+老年代region中，活对象的比率超过G1MixedGCLiveThresholdPercent（默认85%）时，space-reclamation phase将不会回收这个region
+
+关于 G1老年代将要使用多少，如何避免long mixed collection pauses
+详见 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A[Garbage-First Garbage Collector Tuning]
 
 === G1实现了高性能，G1通过哪些方法去达到暂停时间目标？
 
-已分步、并行的方式增量的进行垃圾回收
+以分步、并行的方式增量的进行垃圾回收
+
+参考：
+https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector.html#GUID-ED3AB6D3-FD9B-4447-9EDF-983ED2F7A573[Garbage-First Garbage Collector]
