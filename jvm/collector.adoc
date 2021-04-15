@@ -301,6 +301,53 @@ space-reclamation phase阶段预期的gc次数，默认是8次
 关于 G1老年代将要使用多少，如何避免long mixed collection pauses
 详见 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A[Garbage-First Garbage Collector Tuning]
 
+=== G1 step by step(基于jdk7，新版本可能有些许变化)
+
+- G1堆结构
+
+G1 heap 被分为许多固定大小的region
+image::G1_heap_structure.png[G1_heap_structure]
+
+- G1堆分配
+
+region被设计用于并行收集
+
+image::G1_heap_allocation.png[G1_heap_allocation]
+
+- G1的年轻代收集
+
+初始堆
+image::young_generation_in_G1.png[young_generation_in_G1]
+
+young GC发生(STW)
+
+活对象被疏散到一个或多个survivor region，到达年龄阈值的对象会晋升到老年代。
+image::a_young_GC_in_G1.png[a_young_GC_in_G1]
+
+young GC结束
+image::end_of_young_GC_with_G1.png[end_of_young_GC_with_G1]
+
+==== G1 concurrent marking cycle phases
+
+. **Initial Mark(STW)**在发生一次young GC的基础上，标记有引用老年代对象的survivor region(root region)
+
+. **Root Region Scanning**扫描survivor region获取老年代的引用。与app并发执行，必须在下一次young GC发生之前完成。
+
+. **Concurrent Marking**标记全堆中的活对象，与app并发执行，这个阶段可能被young GC打断。
+
+. **Remark(STW)**使用SATB
+
+. **Cleanup(STW)**记录活对象和空region(STW)；清理remember set(STW)；重置空region，并放到free list
+
+. **Copying(STW)**把活对象疏散到未使用的region，可能发生在young GC、mixed GC
+
+==== G1 Old Generation Collection Step by Step
+image::initial_marking_phase.png[initial_marking_phase]
+image::concurrent_marking_phase.png[concurrent_marking_phase]
+image::remark_phase.png[remark_phase]
+image::copying_or_cleanup_phase.png[copying_or_cleanup_phase]
+image::after_cupying_or_cleanup_phase.png[after_cupying_or_cleanup_phase]
+
 === G1实现了高性能，G1通过哪些方法去达到暂停时间目标？
 
 以分步、并行的方式增量的进行垃圾回收
@@ -315,16 +362,6 @@ space-reclamation phase阶段预期的gc次数，默认是8次
 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector.html#GUID-ED3AB6D3-FD9B-4447-9EDF-983ED2F7A573[Garbage-First Garbage Collector]
 
 https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html[Getting Started with the G1 Garbage Collector]
-
-== CMS
-
-=== CMS Collection Phases
-
-. **Initial Mark(STW)**: 标记老年代中，直接被年轻代对象引用的可达对象。停顿时间通常比minor collection pause短
-
-. **Concurrent Marking**: 与app并发，遍历老年代对象图。用Initial Mark阶段标记的老年代对象作为root，遍历标记所有可达的老年代对象。在2、3、5阶段中分配和晋升的对象都将直接被标记为活跃。
-
-. **Remark(STW)**: 标记在Concurrent Marking阶段由于app运行导致对象更新，被遗漏的对象。
 
 == CMS
 
@@ -388,7 +425,7 @@ image::old_gen_collection-concurrent_sweep.png[old_gen_collection-concurrent_swe
 
 sweeping phase之后，很多内存被释放，也会发现多了很多的碎片空间
 
-最后CMS会经过resetting阶段，等待下一次
+最后CMS会经过resetting阶段，等待下一次达到GC阈值。
 
 
 
