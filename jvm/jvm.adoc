@@ -171,6 +171,10 @@ Both are on by default but can be switched off manually.
 
 Note that compressed object pointers require Java heaps < 32G. So, if the Java heap is >= 32G, compressed oops will be switched off, which will also switch off compressed class pointers.
 
+=== metaspace sizing
+
+Class metadata is deallocated when the corresponding Java class is unloaded. Java classes are unloaded as a result of garbage collection, and garbage collections may be induced to unload classes and deallocate class metadata. When the space committed for class metadata reaches a certain level (a high-water mark), a garbage collection is induced. After the garbage collection, the high-water mark may be raised or lowered depending on the amount of space freed from class metadata. The high-water mark would be raised so as not to induce another garbage collection too soon. The high-water mark is initially set to the value of the command-line option -XX:MetaspaceSize. It is raised or lowered based on the options -XX:MaxMetaspaceFreeRatio and -XX:MinMetaspaceFreeRatio. If the committed space available for class metadata as a percentage of the total committed space for class metadata is greater than -XX:MaxMetaspaceFreeRatio, then the high-water mark will be lowered. If it's less than -XX:MinMetaspaceFreeRatio, then the high-water mark will be raised.
+
 == collector
 
 === Garbage-First Garbage Collector
