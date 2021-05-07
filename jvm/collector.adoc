@@ -309,6 +309,32 @@ space-reclamation phase阶段预期的gc次数，默认是8次
 
 线程从堆中申请一段缓冲区，用于线程本地分配对象，TLAB内部有3个指针，start、top、end，start、end用于标记TLAB的边界，top用于区分已使用和未使用区域。当TLAB中剩余空间无法容纳当前分配对象时，  可能分配在TLAB外，也可能申请一个新的TLAB，通过一些参数可以配置。
 
+==== Remembered Set
+
+region中被划分为多个card table。cardtable将512个byte映射到1个byte，对region中的部分连续空间中的对象进行聚合，粒度变粗，提升在region中查找对象的效率。
+
+每一个region拥有一个RSet，用于记录所有引用了该region对象的region及其中的card table index。RSet是card的集合，由hashtable实现（实际为了支持并行GC，每个region拥有一个由多个hashtable组成的数组，从而允许多个线程互不影响的更新RSet，从上层看，在逻辑上这多个hashtable的并集表现为一个hashtable）
+
+当app线程更改对象引用时，app线程通知到collector线程哪个**card table**发生了变更。
+
+===== Remember Set Write Barrier
+
+在指针的写操作之后，会执行Remember Set Write Barrier（Barrier听起来很牛，其实就是一个post操作）。
+
+**Remember Set Write Barrier**
+
+以执行x.f = y为例，如果x.f指针写操作前后的两个对象在一个region中，不需要执行任何操作。如果不在同一个region中，表示创建了一个out-of-region pointer，会执行rs_enqueue方法，读取x对象所在的card，如果是dirty，不执行任何操作（这里聚合了一个卡表上的多次操作，在向空卡表写入时，这种情况会频繁发生）。如果card is not dirty，将他标记为dirty，将这个card记录到当前线程的一个buffer中(remembered set log queue)。如果buffer满了（默认256），buffer会被放到一个global set 中，再给当前线程分配一个空队列。
+
+简单说就是当发生指针写操作时，将card加入到buffer中，其中做了一些优化操作。
+
+**remembered set thread**
+
+当global buffer set size到达阈值时（默认5），remembered set thread会处理buffer，把buffer当作队列，一个个的处理队列中的card。直到global buffer set size减小到阈值的1 / 4。
+
+hot card: 被频繁修改的card。为了避免频繁处理hot card，用一个新的card table记录 从上一次evacuation pause起，这个card被标记为dirty的次数。remembered set thread每处理一个card，这个card的次数就会+1。当count达到hotness threshold（默认4）时，这个card会被加入到hot queue（默认大小1k），在evacuation pause开始时候，hot queue会被处理掉。如果queue满了，会从queue中取出第一个card处理掉。
+
+如何处理dirty card？remembered set thread先将card置为clean，后续的修改都将重新把card置为dirty。之后找到所有发生变化的指针中指向当前region外的指针，将当前region、当前card记录到外部region的RSet中。
+
 
 
 === G1 step by step(基于jdk7，新版本可能有些许变化)
