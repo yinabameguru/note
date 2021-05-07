@@ -301,6 +301,16 @@ space-reclamation phase阶段预期的gc次数，默认是8次
 关于 G1老年代将要使用多少，如何避免long mixed collection pauses
 详见 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A[Garbage-First Garbage Collector Tuning]
 
+=== 关键的数据结构、机制
+
+==== TLAB（Thread-Local Allocation Buffers）
+
+解决多多线程在堆上分配对象时的竞争问题
+
+线程从堆中申请一段缓冲区，用于线程本地分配对象，TLAB内部有3个指针，start、top、end，start、end用于标记TLAB的边界，top用于区分已使用和未使用区域。当TLAB中剩余空间无法容纳当前分配对象时，  可能分配在TLAB外，也可能申请一个新的TLAB，通过一些参数可以配置。
+
+
+
 === G1 step by step(基于jdk7，新版本可能有些许变化)
 
 - G1堆结构
