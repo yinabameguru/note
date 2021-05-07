@@ -1,0 +1,9 @@
+= 黑话
+
+barrier::
+
+- 屏障，其实就是拦截下来做一段事情，和常见的pre、after等含义差不多。例如：G1中的remembered set write barrier，就是在发生指针写操作之后执行的一段代码，通俗将就是afterPointerWrite(parm)。
+
+dogfooding::
+
+- 指使自己用自己开发的产品，例如：JetBrains利用自家产品Clion开发JBR
