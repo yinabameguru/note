@@ -327,13 +327,22 @@ region中被划分为多个card table。cardtable将512个byte映射到1个byte�
 
 简单说就是当发生指针写操作时，将card加入到buffer中，其中做了一些优化操作。
 
-**remembered set thread**
+===== remembered set thread
 
 当global buffer set size到达阈值时（默认5），remembered set thread会处理buffer，把buffer当作队列，一个个的处理队列中的card。直到global buffer set size减小到阈值的1 / 4。
 
 hot card: 被频繁修改的card。为了避免频繁处理hot card，用一个新的card table记录 从上一次evacuation pause起，这个card被标记为dirty的次数。remembered set thread每处理一个card，这个card的次数就会+1。当count达到hotness threshold（默认4）时，这个card会被加入到hot queue（默认大小1k），在evacuation pause开始时候，hot queue会被处理掉。如果queue满了，会从queue中取出第一个card处理掉。
 
 如何处理dirty card？remembered set thread先将card置为clean，后续的修改都将重新把card置为dirty。之后找到所有发生变化的指针中指向当前region外的指针，将当前region、当前card记录到外部region的RSet中。
+
+==== Evacuation Pauses
+
+STW，将collection set中region里的或对象复制到新的region中，并释放region。对象复制移动的动作，对于app线程必须是原子的，在并发系统中实现这种原子操作代价很大，所以被安排在STW中执行。
+
+Evacuation Pauses中GC工作的主要流程：串行（sequentially）构建出一个collection set，并行启动多个线程，去竞争执行多个任务（处理log buffer，更新RSet，疏散活对象等task）。每个任务只有一个线程去执行，线程间没有同步。
+
+在复制对象到新的region时，如何做到高效并行，均衡负载？使用了GCLAB，GC线程的本地缓冲，类似TLAB，GC线程先复制一个旧对象到GCLAB，然后线程建竞争去在老对象上设置一个转发指针，转发到复制的对象上，竞争成功的线程负责这个对象的复制和后续的依赖指针切换等工作。
+
 
 
 
