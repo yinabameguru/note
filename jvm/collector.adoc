@@ -309,6 +309,47 @@ space-reclamation phase阶段预期的gc次数，默认是8次
 
 线程从堆中申请一段缓冲区，用于线程本地分配对象，TLAB内部有3个指针，start、top、end，start、end用于标记TLAB的边界，top用于区分已使用和未使用区域。当TLAB中剩余空间无法容纳当前分配对象时，  可能分配在TLAB外，也可能申请一个新的TLAB，通过一些参数可以配置。
 
+==== 三色标记（tricolor marking）
+
+实现了gc线程与app线程的并发执行，解决了传统mark-and-sweep收集器在整个gc期间需要STW，全堆扫描的问题。
+
+
+form why:
+
+在标记过程中，按照对象是否被访问过，将对象标记为三种颜色：
+
+白色：表示对象尚未被垃圾回收器访问过。
+
+黑色：表示对象已经被垃圾回收器访问过，且这个对象的所有引用都已经扫描过。
+
+灰色：表示对象已经被垃圾回收器访问过，但这个对象至少存在一个引用还没有被扫描过。
+
+from wiki:
+
+将对象划分到三个集合中：
+
+白色：本次回收的候选对象集合。
+
+黑色：没有指向白色集合指针，且从root可达 的对象集合。（黑色集合中的对象不是回收的候选对象，不会被回收）。
+
+灰色：根可达，但是还没有扫描该对象拥有的白色对象引用的对象集合。灰色集合中的对象最终都会变成黑色对象。
+
+主要流程：
+
+1.初始时，将所有root引用对象放入灰色集合，其他对象放入白色集合
+
+2.灰色集合中任选一个对象，放入黑色集合中。
+
+3.将该对象所有直接引用的白色对象放入灰色集合
+
+4.重复2 3，直到灰色集合为空。
+
+最终，灰色集合为空，黑色集合中的对象是root可达的，不能被回收，白色集合中的对象是root不可达的，可以被回收。
+
+the tri-color invariant：
+
+三色标记提供的一个重要特性，黑色集合的对象不能直接指向白色集合，这确保了当灰色集合为空时，白色集合的对象都可以被回收。
+
 ==== Remembered Set
 
 region中被划分为多个card table。cardtable将512个byte映射到1个byte，对region中的部分连续空间中的对象进行聚合，粒度变粗，提升在region中查找对象的效率。
@@ -335,6 +376,7 @@ hot card: 被频繁修改的card。为了避免频繁处理hot card，用一个�
 
 如何处理dirty card？remembered set thread先将card置为clean，后续的修改都将重新把card置为dirty。之后找到所有发生变化的指针中指向当前region外的指针，将当前region、当前card记录到外部region的RSet中。
 
+
 ==== Evacuation Pauses
 
 STW，将collection set中region里的或对象复制到新的region中，并释放region。对象复制移动的动作，对于app线程必须是原子的，在并发系统中实现这种原子操作代价很大，所以被安排在STW中执行。
@@ -343,7 +385,9 @@ Evacuation Pauses中GC工作的主要流程：串行（sequentially）构建出�
 
 在复制对象到新的region时，如何做到高效并行，均衡负载？使用了GCLAB，GC线程的本地缓冲，类似TLAB，GC线程先复制一个旧对象到GCLAB，然后线程建竞争去在老对象上设置一个转发指针，转发到复制的对象上，竞争成功的线程负责这个对象的复制和后续的依赖指针切换等工作。
 
+==== Concurrent Marking
 
+在Comcurrent Marking中，构成的collection set内部排序如何实现的garbage first？
 
 
 === G1 step by step(基于jdk7，新版本可能有些许变化)
