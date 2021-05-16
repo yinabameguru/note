@@ -117,3 +117,13 @@ git config --global --unset https.https://github.com.proxy
 git config --global --unset http.proxy
 git config --global --unset https.proxy
 
+
+通过rebase修改历史提交
+
+git rebase -i {commitid}
+
+将输出中需要更改的commit 前的pick改为edit
+
+执行一些更改操作 例如修改作者git commit --amend --author "username <abcdef@gmail.com>"
+git rebase --continue
+git push -f
