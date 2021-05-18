@@ -350,6 +350,8 @@ the tri-color invariant：
 
 三色标记提供的一个重要特性，黑色集合的对象不能直接指向白色集合，这确保了当灰色集合为空时，白色集合的对象都可以被回收。
 
+image::Animation_of_tri-color_garbage_collection.gif[Animation_of_tri-color_garbage_collection]
+
 ==== Remembered Set
 
 region中被划分为多个card table。cardtable将512个byte映射到1个byte，对region中的部分连续空间中的对象进行聚合，粒度变粗，提升在region中查找对象的效率。
@@ -388,6 +390,32 @@ Evacuation Pauses中GC工作的主要流程：串行（sequentially）构建出�
 ==== Concurrent Marking
 
 在Comcurrent Marking中，构成的collection set内部排序如何实现的garbage first？
+
+==== SATB
+
+SATB是Concurrent Marking中一个重要的数据结构，通过两个bitmap实现。
+
+previous bitmap: 记录的是上一次concurrent marking阶段完成时，标记完成最终产生的bitmap。
+
+next bitmap: 仅在marking过程中存在，是一个构建中的bitmap。
+
+===== TAMS (top at mark start)
+
+每个regin有两个TAMS指针，nextTAMS指向这次concurrent marking开始时，region使用的top位置（也是next bitmap的top），preTAMS指向pre bitmap的top。
+
+在initial marking 停顿中，preTAMS指向bottom，NextTAMS指向top。此时初始化出一个空的next bitmap，其覆盖范围是bottom到nextTAMS。每一个region都拥有一个next bitmap，包含了所有在initial marking发生时，region中已使用的对象，即用这些bitmap创建出了一个marking开始是的对的镜像，即**SATB**。在initial marking阶段，初始化的next bitmap中，所有的对象即对应三色标记中的所有白色对象。所有GCRoot直接关联的对象，即对应三色标记中的灰色对象。
+
+initial marking结束后，进入concurrent marking阶段，即从GCRoot出发，遍历对象图，将GCRoot可达的对象对应的bitmap位置进行标记，并发标记完成时，所有bitmap中被标记的位置，映射到的对象就对应三色标记中的黑色，为标记的对象对应白色（**在不考虑黑色对象指针变动的情况下，可能因为指针变动产生对象消失**）。同时，在并发标记期间，新创建的对象，由于不在bitmap映射的范围内，所以不参与标记与回收，在下一次的标记过程中才会被处理。这些对象中的垃圾对象被成为浮动垃圾。
+
+之后，进入remark阶段，处理在concurrent marking阶段发生引用变更的对象。
+
+之后进入clean up阶段，此时marking阶段完成，next bitmap构建完成，与pre bitmap互换，即next bitmap变为pre bitmap，next bitmap在下次标记开始时候清空。
+
+至此，prebitmap中就标记除了每一个region中的黑色对象与白色对象，在下一个阶段执行的多次mixed GC中回收。
+
+image::G1_marking.png[G1_marking]
+
+参考：G1论文，why的推文 https://mp.weixin.qq.com/s/tWsuQ0HD3RAiKzS-w6giqQ[1] https://mp.weixin.qq.com/s/p3xBnZw-kjRXTH0J-6Rmyw[2]
 
 
 === G1 step by step(基于jdk7，新版本可能有些许变化)
