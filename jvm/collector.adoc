@@ -478,8 +478,16 @@ void oop_field_store(oop* field, oop new_value) {
 
 写前屏障用力啊维护SATB，写后屏障用来维护remembered set。
 
+===== logging write barrier
 
-参考：G1论文，https://hllvm-group.iteye.com/group/topic/44381
+为了尽量减少write barrier对mutator性能的影响，G1将一部分原本要在barrier里做的事情挪到别的线程上并发执行。
+实现这种分离的方式就是通过logging形式的write barrier：mutator只在barrier里把要做的事情的信息记（log）到一个队列里，然后另外的线程从队列里取出信息批量完成剩余的动作。
+
+以SATB write barrier为例，每个Java线程有一个独立的、定长的SATBMarkQueue，mutator在barrier里只把old_value压入该队列中。一个队列满了之后，它就会被加到全局的SATB队列集合SATBMarkQueueSet里等待处理，然后给对应的Java线程换一个新的、干净的队列继续执行下去。
+
+并发标记（concurrent marker）会定期检查全局SATB队列集合的大小。当全局集合中队列数量超过一定阈值后，concurrent marker就会处理集合里的所有队列：把队列里记录的每个oop都标记上，并将其引用字段压到标记栈（marking stack）上等后面做进一步标记。即三色标记中放入灰色集合中。
+
+参考：G1论文，https://hllvm-group.iteye.com/group/topic/44381 https://www.jfokus.se/jfokus17/preso/Write-Barriers-in-Garbage-First-Garbage-Collector.pdf
 
 
 === G1 step by step(基于jdk7，新版本可能有些许变化)
