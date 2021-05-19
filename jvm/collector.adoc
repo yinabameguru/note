@@ -352,6 +352,19 @@ the tri-color invariant：
 
 image::Animation_of_tri-color_garbage_collection.gif[Animation_of_tri-color_garbage_collection]
 
+标记过程中，由于引用的变动，会导致两种问题
+
+1：黑色到灰色/黑色到黑色的引用断开，导致实际应该被回收的对象为被回收，这些对象被称为**浮动垃圾**。
+
+2：同时满足一下两个条件时，会导致**对象丢失**，最终对象图遍历不完全。
+
+条件一：赋值器插入了一条或者多条从黑色对象到白色对象的新引用。
+
+条件二：赋值器删除了全部从灰色对象到该白色对象的直接或间接引用。
+
+image::tricolor_marking_lose_object.png[tricolor_marking_lose_object]
+image::tricolor_marking_lose_object_v2.png[tricolor_marking_lose_object_v2]
+
 ==== Remembered Set
 
 region中被划分为多个card table。cardtable将512个byte映射到1个byte，对region中的部分连续空间中的对象进行聚合，粒度变粗，提升在region中查找对象的效率。
@@ -416,6 +429,12 @@ initial marking结束后，进入concurrent marking阶段，即从GCRoot出发�
 image::G1_marking.png[G1_marking]
 
 参考：G1论文，why的推文 https://mp.weixin.qq.com/s/tWsuQ0HD3RAiKzS-w6giqQ[1] https://mp.weixin.qq.com/s/p3xBnZw-kjRXTH0J-6Rmyw[2]
+
+==== Concurrent Marking Write Barrier
+
+解决在并发标记期间，由于黑色对象
+
+参考：G1论文，https://hllvm-group.iteye.com/group/topic/44381
 
 
 === G1 step by step(基于jdk7，新版本可能有些许变化)
