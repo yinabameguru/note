@@ -432,7 +432,52 @@ image::G1_marking.png[G1_marking]
 
 ==== Concurrent Marking Write Barrier
 
-解决在并发标记期间，由于黑色对象
+解决在并发标记期间，由于 新增由某黑色对象到白色对象的引用且同时删除所有灰色对象到该白色对象引用 而导致对象丢失的问题。
+
+G1会设置一个写前屏障，伪代码如下：
+
+
+1| rTmp := load(rThread + MarkingInProgressOffset)
+2| if (!rTmp) goto filtered
+3| rTmp := load(rX + FieldOffset)
+4| if (rTmp == null) goto filtered
+5| call satb_enqueue(rTmp)
+6| filtered:
+
+第1、2行检查当前是否在标记过程中，不在标记过程中跳过。这一步跳过了大多数指针修改。
+
+第3、4行判断指针指向的旧对象是否为空，为空则跳过。在大多数程序中，对象一般都是先初始化为一个null值，之后在对其进行赋值，这里判空是一个很有效的过滤方法。
+
+第5行，把指针指向的就对象放入到线程私有的 current marking buffer。类似 remembered set buffer，如果线程本地的buffer满了，这个buffer会被放到global set of completed marking buffers。concurrent
+marking thread定期的检查global set的size，中断堆遍历去处理这些buffer。
+
+这个写屏障是基于Real-time garbage collection on general-purpose machines, Taiichi Yuasa（湯淺 太一） 这篇论文
+论文中的pre-write barrie抽象逻辑：
+[source,c++]
+void pre_write_barrier(oop* field) {  
+  if ($gc_phase == GC_CONCURRENT_MARK) { // SATB invariant only maintained during concurrent marking  
+    oop old_value = *field;  
+    if (old_value != null && !is_marked(old_value)) {  
+      mark_object(old_value);  
+      $mark_stack->push(old_value); // scan all of old_value's fields later  
+    }  
+  }  
+} 
+
+其中is_marked(old_value)检查旧对象是否被标记过，$mark_stack->push(old_value)标记所有旧对象引用的对象。这两个动作实际在G1的写前屏障中是没做的。实际还是做了，在logging barrier的时候会展开说明。
+
+看到这里，可以发现G1中，指针写操作的barrier实际如下：
+[source,c++]
+````
+void oop_field_store(oop* field, oop new_value) {  
+  pre_write_barrier(field);             // pre-write barrier: for maintaining SATB invariant  
+  *field = new_value;                   // the actual store  
+  post_write_barrier(field, new_value); // post-write barrier: for tracking cross-region reference  
+}  
+````
+
+写前屏障用力啊维护SATB，写后屏障用来维护remembered set。
+
 
 参考：G1论文，https://hllvm-group.iteye.com/group/topic/44381
 
