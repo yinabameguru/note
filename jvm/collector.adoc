@@ -485,9 +485,16 @@ void oop_field_store(oop* field, oop new_value) {
 
 以SATB write barrier为例，每个Java线程有一个独立的、定长的SATBMarkQueue，mutator在barrier里只把old_value压入该队列中。一个队列满了之后，它就会被加到全局的SATB队列集合SATBMarkQueueSet里等待处理，然后给对应的Java线程换一个新的、干净的队列继续执行下去。
 
-并发标记（concurrent marker）会定期检查全局SATB队列集合的大小。当全局集合中队列数量超过一定阈值后，concurrent marker就会处理集合里的所有队列：把队列里记录的每个oop都标记上，并将其引用字段压到标记栈（marking stack）上等后面做进一步标记。即三色标记中放入灰色集合中。
+并发标记（concurrent marker）会定期检查全局SATB队列集合的大小。当全局集合中队列数量超过一定阈值后，concurrent marker就会处理集合里的所有队列：把队列里记录的每个oop都标记上，并将其引用字段压到标记栈（marking stack）上等后面做进一步标记。即把buffer中的对象放入灰色集合中。
 
 参考：G1论文，https://hllvm-group.iteye.com/group/topic/44381 https://www.jfokus.se/jfokus17/preso/Write-Barriers-in-Garbage-First-Garbage-Collector.pdf
+
+==== Final Marking Pause(remark)
+
+G1中何时算作marking完成？1、并发标记遍历了所有的SATB中的对象。2、所有logging buffer都被处理完（包括线程本地的buffer和全局的buffer）。
+
+在与用户线程并发的情况下，用户线程会不断的向buffer中添加数据，因此达到条件2比较难，所以这里有一次STW。停止用户线程，清空buffer就很容易了。情况buffer的过程是并行的，防止某些buffer处理慢导致停顿时间长。
+
 
 
 === G1 step by step(基于jdk7，新版本可能有些许变化)
