@@ -1,0 +1,197 @@
+.UML Pizza Store
+[uml,file="pizza-store.png"]
+--
+together {
+    abstract PizzaStore {
+        {abstract} Pizza create()
+        void bake()
+        void cat()
+        void box()
+        Pizza orderPizza()
+    }
+    
+    class NyPizzaStore {
+        Pizza create()
+    }
+    
+    class NyCheesePizza
+    class ChicagoCheesePizza
+    class NyClamPizza
+    class ChicagoClamPizza
+    
+    class ChicagoPizzaStore {
+        Pizza create()
+    }
+}
+
+abstract Pizza
+
+PizzaStore <|-- NyPizzaStore
+PizzaStore <|-- ChicagoPizzaStore
+
+
+Pizza <|-- NyCheesePizza
+Pizza <|-- ChicagoCheesePizza
+Pizza <|-- NyClamPizza
+Pizza <|-- ChicagoClamPizza
+
+NyPizzaStore --> NyCheesePizza : create >
+NyPizzaStore --> NyClamPizza : create >
+ChicagoPizzaStore --> ChicagoCheesePizza : create >
+ChicagoPizzaStore --> ChicagoClamPizza : create >
+
+--
+
+.UML Factory Method pattern
+[uml,file="factory-method.png"]
+--
+
+abstract Product
+class ConcreteProduct
+
+abstract Creator
+class ConcreteCreator
+
+Product <|-- ConcreteProduct        
+Creator <|-- ConcreteCreator
+ConcreteCreator -left-> ConcreteProduct : create >
+
+--
+
+.UNL DI--Pizza
+[uml,file="di-pizza.png"]
+--
+
+class PizzaStore
+class NyCheesePizza
+class ChicagoCheesePizza
+class NyClamPizza
+class ChicagoClamPizza
+
+PizzaStore --> NyCheesePizza
+PizzaStore --> ChicagoCheesePizza
+PizzaStore --> NyClamPizza
+PizzaStore --> ChicagoClamPizza
+
+
+note right of PizzaStore : 上层依赖下层实现
+note top of NyCheesePizza : 下层无依赖
+
+--
+
+.UML DI--Pizza2
+[uml,file="di-pizza2.png"]
+--
+
+class PizzaStore
+abstract Pizza
+class NyCheesePizza
+class ChicagoCheesePizza
+class NyClamPizza
+class ChicagoClamPizza
+
+PizzaStore -down-> Pizza
+NyCheesePizza -up-> Pizza
+ChicagoCheesePizza -up-> Pizza
+NyClamPizza -up-> Pizza
+ChicagoClamPizza -up-> Pizza
+
+note right of PizzaStore : 上层不依赖实现，依赖抽象
+note right of Pizza : 抽象pizza
+note top of NyCheesePizza : 下层依赖上层抽象（倒置依赖）
+
+--
+
+.UML Pizza Ingredient Factory
+[uml,file="pizza-ingredient-factory.png"]
+--
+together {
+    interface PizzaIngredientFactory {
+        {abstract} Cheese createCheese()
+        {abstract} Clam createClam()
+    }
+    class NyPizzaIngredientFactory {
+        Cheese createCheese()
+        Clam createClam()
+    }
+    class ChicagoPizzaIngredientFactory {
+        Cheese createCheese()
+        Clam createClam()
+    }
+    class MozzarellaCheese
+    class ReggianoCheese
+    class FrozenClam
+    class FreshClam
+}
+together {
+    interface Cheese
+    interface Clam
+}
+class PizzaStore
+
+PizzaIngredientFactory <|-- NyPizzaIngredientFactory
+PizzaIngredientFactory <|-- ChicagoPizzaIngredientFactory
+NyPizzaIngredientFactory --> MozzarellaCheese : create >
+NyPizzaIngredientFactory --> FrozenClam : create >
+ChicagoPizzaIngredientFactory --> ReggianoCheese : create >
+ChicagoPizzaIngredientFactory --> FreshClam : create >
+Cheese <|-- MozzarellaCheese
+Cheese <|-- ReggianoCheese
+Clam <|-- FrozenClam
+Clam <|-- FreshClam
+PizzaStore o-- PizzaIngredientFactory
+PizzaStore --> Cheese : use >
+PizzaStore --> Clam : use >
+
+--
+
+.UML Abstract Factory
+[uml,file="abstract-factory.png"]
+--
+
+together {
+    interface AbstractFactory
+    class ConcreteFactory1
+    class ConcreteFactory2
+    class ProductA1
+    class ProductA2
+    class ProductB1
+    class ProductB2
+}
+together {
+    interface AbstractProductA
+    interface AbstractProductB
+}
+class Client
+
+AbstractFactory <|-- ConcreteFactory1
+AbstractFactory <|-- ConcreteFactory2
+AbstractProductA <|-right- ProductA1
+AbstractProductA <|-right- ProductA2
+AbstractProductB <|-right- ProductB1
+AbstractProductB <|-right- ProductB2
+ConcreteFactory1 --> ProductA1 : create >
+ConcreteFactory1 --> ProductB1 : create >
+ConcreteFactory2 --> ProductA2 : create >
+ConcreteFactory2 --> ProductB2 : create >
+Client o-- AbstractFactory
+Client --> AbstractProductA : use >
+Client --> AbstractProductB : use >
+
+--
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
