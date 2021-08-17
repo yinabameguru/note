@@ -1,0 +1,53 @@
+= mysql
+
+= mysql体系结构
+image::resource/mysql_structure.png[mysql体系结构]
+
+MySQL由以下几部分组成::
+
+- 连接池组件□ 管理服务和工具组件
+- SQL接口组件
+- 查询分析器组件
+- 优化器组件
+- 缓冲（Cache）组件
+- 插件式存储引擎
+- 物理文件
+
+**存储引擎是基于表的，不是基于数据库的
+
+= innoDB存储引擎体系结构
+
+image::resource/innoDB_structure.png[innoDB体系结构]
+
+== 后台线程
+
+* Master Thread
+** 主要负责将缓冲池中的数据异步刷新到磁盘，保证数据的一致性，包括脏页的刷新、合并插入缓冲（INSERTBUFFER）、UNDO页的回收等
+
+* IO Thread
+** 负责这些IO请求的回调（call back）处理
+
+* Purge Thread
+** 回收undo页
+
+* Page Cleaner Thread
+** 刷新脏页
+
+== 内存
+
+=== InnoDB内存结构
+
+image::resource\innoDB_memory_structure.png[InnoDB内存结构]
+
+对于数据库中页的修改操作，则首先修改在缓冲池中的页，然后再以一定的频率刷新到磁盘上。页从缓冲池刷新回磁盘的操作并不是在每次页发生更新时触发
+
+通过show engine innodb status;可以查看内存状态
+
+=== 通过LRU List、Free List、Flush List管理缓冲池
+
+* Free List: Free List中是可用的空闲页
+
+
+* LRU Lists: 在InnoDB存储引擎中，缓冲池中页的大小默认为16KB，使用LRU算法对缓冲池进行管理。稍有不同的是InnoDB存储引擎对传统的LRU算法做了一些优化。在InnoDB的存储引擎中，LRU列表中还加入了midpoint位置。新读取到的页，虽然是最新访问的页，但并不是直接放入到LRU列表的首部，而是放入到LRU列表的midpoint位置(默认新读取的页插入到LRU列表尾端的37%的位置)。这个算法在InnoDB存储引擎下称为midpoint insertion strategy
+
+**midpoint防止热点数据被刷出缓存**
