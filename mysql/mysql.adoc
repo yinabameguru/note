@@ -48,6 +48,64 @@ image::resource\innoDB_memory_structure.png[InnoDB内存结构]
 * Free List: Free List中是可用的空闲页
 
 
-* LRU Lists: 在InnoDB存储引擎中，缓冲池中页的大小默认为16KB，使用LRU算法对缓冲池进行管理。稍有不同的是InnoDB存储引擎对传统的LRU算法做了一些优化。在InnoDB的存储引擎中，LRU列表中还加入了midpoint位置。新读取到的页，虽然是最新访问的页，但并不是直接放入到LRU列表的首部，而是放入到LRU列表的midpoint位置(默认新读取的页插入到LRU列表尾端的37%的位置)。这个算法在InnoDB存储引擎下称为midpoint insertion strategy
+* LRU Lists: 在InnoDB存储引擎中，缓冲池中页的大小默认为16KB，使用LRU算法对缓冲池进行管理。稍有不同的是InnoDB存储引擎对传统的LRU算法做了一些优化。在InnoDB的存储引擎中，LRU列表中还加入了midpoint位置。新读取到的页，虽然是最新访问的页，但并不是直接放入到LRU列表的首部，而是放入到LRU列表的midpoint位置(默认新读取的页插入到LRU列表尾端的37%的位置 即old blocks)。这个算法在InnoDB存储引擎下称为midpoint insertion strategy
+
+midpoint前半部分定义为new blocks，后半部分定义为old blocks
 
 **midpoint防止热点数据被刷出缓存**
+
+**被读到LRU List里，后半部分的数据，要等待一段时间（innodb_old_blocks_time default 1000ms）后，如果再被读取时候还在list中，才会被加入到前半部分**
+
+=== redo log buffer
+
+InnoDB存储引擎首先将重做日志信息先放入到redo log buffer，然后按一定频率将其刷新到重做日志文件
+
+这三种情况会讲buffer刷到磁盘::
+- Master Thread每一秒将重做日志缓冲刷新到重做日志文件
+- 每个事务提交时会将重做日志缓冲刷新到重做日志文件
+- 当重做日志缓冲池剩余空间小于1/2时，重做日志缓冲刷新到重做日志文件
+
+=== 额外内存池
+
+提供给缓冲池内部结构额外消耗使用的内存池
+
+== Checkpoint技术
+
+Write Ahead Log::
+
+- 当前事务数据库系统普遍都采用了Write Ahead Log策略，即当事务提交时，先写重做日志，再修改页。当由于发生宕机而导致数据丢失时，通过重做日志来完成数据的恢复。这也是事务ACID中D（Durability持久性）的要求。
+
+**倘若每次一个页发生变化，就将新页的版本刷新到磁盘,IO开销很大，若热点数据集中在某几个页中，先写入缓存，然后定期把缓存刷入磁盘，就合并了一个页中的多次修改，减少了磁盘IO**
+
+innoDB设有checkpoint，就是分时段把缓存中的脏页刷到磁盘，innoDB中有两种checkpoint**Sharp Checkpoint**和**Fuzzy Checkpoint**
+
+Sharp Checkpoint将所有脏页全量刷新到磁盘，对数据库可用性影响很大，默认只在数据库关闭时候执行
+
+Fuzzy Checkpoint将部分脏页增量刷新到磁盘，数据库运行时候都是进入Fuzzy CheckPoint
+
+
+innoDB中有一下集中Fuzzy CheckPoint::
+* Master Thread Checkpoint
+** Master Thread中发生的Checkpoint，差不多以每秒或每十秒的速度从缓冲池的脏页列表中刷新一定比例的页回磁盘，异步非阻塞
+* FLUSH_LRU_LIST Checkpoint
+** InnoDB存储引擎需要保证LRU列表中需要有差不多100个空闲页可供使用，如果没有，那就要移除LRU List尾部的页，如果有脏页，就需要进入checkpoint刷脏页。Page Cleaner中执行，异步非阻塞
+* Async/Sync Flush Checkpoint
+** 重做日志文件不可用的情况，这时需要强制将一些页刷新回磁盘，而此时脏页是从脏页列表中选取的，Page Cleaner Thread，异步非阻塞
+* Dirty Page too much Checkpoint
+** 脏页太多时进入checkpiont，默认脏页数据超过75%时进入
+
+== Master Thread
+
+1.0的伪代码
+
+image::resource\master_thread_1.0.png[1.0的伪代码]
+
+1.1的伪代码
+
+image::resource\master_thread_v1.1.png[]
+
+== InnoDB特性
+
+=== insert buffer（delete buffer、update buffer 同理，统称change buffer）
+
+对于**非聚集索引**的插入或更新操作，不是每一次直接插入到索引页中，而是先判断插入的非聚集索引页是否在缓冲池中，若在，则直接插入；若不在，则先放入到一个Insert Buffer对象中。然后再以一定的频率和情况进行Insert Buffer和辅助索引页子节点的merge（合并）操作，这时通常能将多个插入合并到一个操作中（因为在一个索引页中），这就大大提高了对于非聚集索引插入的性能。（和G1中hot card是一个思路）
