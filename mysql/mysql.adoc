@@ -184,7 +184,7 @@ bin_log_format设bin log的格式，有3种格式
 
 可以通过innodb_file_per_table=on设置为每一个表创建一个单独的文件（tablename.ibd）用于存储该表的数据
 
-单独的表空间文件只存储该表的数据、索引、插入缓冲等信息，其余信息还在默认表空间（共享表空间）中
+单独的表空间文件只存储该表的数据、索引、插入缓冲的bitmap等信息，其余信息还在默认表空间（共享表空间）中
 
 image::resource\innoDB_table_file.png[innoDB表存储引擎文件]
 
@@ -192,13 +192,35 @@ image::resource\innoDB_table_file.png[innoDB表存储引擎文件]
 
 记录innoDB存储引擎的事务日志，用于数据库恢复时候恢复数据
 
+= 表
+
+== InnoDB逻辑存储结构
+
+所有数据都被存放在表空间中，表空间由段、区、页组成。页也被称为块。
+
+image::resource\innoDB_table_structure.png[InnoDB逻辑存储结构]
+
+== InnoDB行记录格式
+
+=== Compact行记录格式
 
 
+[width="100%",options="header,footer"]
+|====================
+| 变长字段长度列表 | null标志位 | 记录头信息 | 事务id | 回滚指针 | 列1数据 | 列2数据 | ...... 
+|====================
 
 
+* 变长字段长度列表
+** 记录每个变长字段的长度，长度小于255字节用1个字节表示，长度大于255用两个字节表示
 
+* null标志位
+** 记录null列的位置，把数据为空的列对应的二进制位置标为1
 
+* 记录头
+image::resource\compact_header.png[compact记录头信息]
 
+* 事务id与回滚指针
 
 
 
