@@ -222,13 +222,142 @@ image::resource\compact_header.png[compact记录头信息]
 
 * 事务id与回滚指针
 
+= InnoDB数据页结构
+
+image::resource\innoDB_structure.png[InnoDB数据页结构]
+
+== Infimum和Supremum Record
+
+页中的虚拟行记录，用来界定记录边界，Infimum是下界，它的主键比页中所有主键都小，Supremum是上界，它的主键比页中所有主键都大，这两个界限值都是在页创建时候被建立
+
+image::resource\infimum_supremum.png[Infimum和Supremum Record]
+
+User Record和Free Space
+
+User Record存储行记录
+
+Free Space是个链表，在一条记录被删除后会被加入Free Space
 
 
+= explain 
+
+explain 按照mysql读取表数据的顺序依次为sql语句中的每一个表返回一条数据
+
+mysql的联表：mysql从第一个表中读取一行，然后在第二个表中找到匹配的行，然后在第三个表中找到匹配的行，以此类推。当所有的表被处理完后，MySQL输出所选的列，并通过表列表回溯，直到找到一个有更多匹配行的表。从该表中读取下一行，然后继续处理下一个表。（深度优先遍历）
 
 
+== explain的输出
 
+**id** 
 
+id
 
+**select_type** 
+
+查询类型，主要的几种类型：
+
+* **simple**:简单查询，不含子查询和联合查询
+* **primary**:嵌套查询和联合查询中的最外层查询
+
+**table**
+
+表名
+
+**partitions**
+
+分区
+
+**type**
+
+join type，表示表是如何连接的，**在联表查询的时候很关键**
+
+* **system**
+
+查只有一行数据的系统表的查询，当常量连接
+
+* **const**
+
+最多只能读取到一行数据的查询，当常量连接
+
+**只会发生在将 主键=常量 或 唯一键=常量的时候**
+xx字段=常量的时候，可能也只读取一行数据，但是不满足最多只能读取**一行**数据
+
+* **eq_ref**
+
+在链表时候，深度优先遍历时，对于前面表中的每个行组合，只从该表中读取**一行**。
+当连接使用索引的所有部分，并且索引是主键或UNIQUE NOT NULL索引时使用。
+
+* **ref**
+
+对于前面表中的每个行组合，将从该表中读取具有匹配索引值的**所有行**
+
+* **fulltest**
+
+使用全文索引做连接
+
+和ref类似，但是同时也判断是否为空
+
+* **index_merge**
+
+使用了index_merge，使用一张表上的多个索引查询数据，之后合并。
+
+* **unique_subquery**
+
+* **index_subquery**
+
+* **range**
+
+只检索给定范围内的行，使用索引选择行
+
+* **index**
+
+使用索引扫描
+
+* **all**
+
+对前面表中的每个行组合进行全表扫描
+
+**possible_key**
+
+mysql可能选择的索引
+
+**key**
+
+mysql实际决定使用的索引
+
+**key_len**
+
+mysql实际决定使用的索引的长度，通过key_len可以确定 在一个联合索引中，mysql实际使用了左前缀的那些部分
+
+**ref**
+ref表示了某些列（列名）、常量集合（使用> 或< 等，展示数量）、某个常量（展示const）用来和索引进行比较
+
+**rows**
+执行查询时候需要扫描的行数，是个估计值
+
+**filtered**
+被条件过滤掉的数据百分比，是个估计值
+
+**extra**
+额外信息
+
+* Using filesort
+需要进行一次额外的排序
+
+* Using index
+可以从索引获取到全部数据，不需要根据主键回表（聚簇索引、覆盖索引）
+
+* Using index condition
+使用Index Comdition Pushdown
+
+* Using MRR
+使用Multi-Range Read
+
+* Using temporary
+mysql会创建临时表来保存结果，通常在查询中的group by 和 order by的字段不一样的时候会发生
+
+* Using where
+WHERE子句用于限制哪些行与下一个表匹配或发送给客户端。除非您特别想从表中获取或检查所有行，否则如果Extra值不是Using where且表连接类型为all或index，则查询中可能会出现问题。
 
 
 
