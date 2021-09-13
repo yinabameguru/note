@@ -1,6 +1,6 @@
 = mysql
 
-= 读现象
+== 读现象
 
 * 脏读
 ** 当前事务可以读到其他事务修改但尚未提交的数据行
@@ -21,7 +21,7 @@ ____
 
 
 
-= 事务隔离级别
+== 事务隔离级别
 
 * 串行化
 ** 避免一切读现象
@@ -32,9 +32,9 @@ ____
 * 读未提交
 ** 发生幻读、不可重复读、脏读
 
-image::resource\isolation_levels_vs_read_phenomena.png[隔离级别和读现象的关系]
+image::resource/isolation_levels_vs_read_phenomena.png[隔离级别和读现象的关系]
 
-= mysql体系结构
+== mysql体系结构
 image::resource/mysql_structure.png[mysql体系结构]
 
 MySQL由以下几部分组成::
@@ -49,11 +49,11 @@ MySQL由以下几部分组成::
 
 **存储引擎是基于表的，不是基于数据库的
 
-= innoDB存储引擎体系结构
+== innoDB存储引擎体系结构
 
 image::resource/innoDB_structure.png[innoDB体系结构]
 
-== 后台线程
+=== 后台线程
 
 * Master Thread
 ** 主要负责将缓冲池中的数据异步刷新到磁盘，保证数据的一致性，包括脏页的刷新、合并插入缓冲（INSERTBUFFER）、UNDO页的回收等
@@ -67,17 +67,17 @@ image::resource/innoDB_structure.png[innoDB体系结构]
 * Page Cleaner Thread
 ** 刷新脏页
 
-== 内存
+=== 内存
 
-=== InnoDB内存结构
+==== InnoDB内存结构
 
-image::resource\innoDB_memory_structure.png[InnoDB内存结构]
+image::resource/innoDB_memory_structure.png[InnoDB内存结构]
 
 对于数据库中页的修改操作，则首先修改在缓冲池中的页，然后再以一定的频率刷新到磁盘上。页从缓冲池刷新回磁盘的操作并不是在每次页发生更新时触发
 
 通过show engine innodb status;可以查看内存状态
 
-=== 通过LRU List、Free List、Flush List管理缓冲池
+==== 通过LRU List、Free List、Flush List管理缓冲池
 
 * Free List: Free List中是可用的空闲页
 
@@ -90,7 +90,7 @@ midpoint前半部分定义为new blocks，后半部分定义为old blocks
 
 **被读到LRU List里，后半部分的数据，要等待一段时间（innodb_old_blocks_time default 1000ms）后，如果再被读取时候还在list中，才会被加入到前半部分**
 
-=== redo log buffer
+==== redo log buffer
 
 InnoDB存储引擎首先将重做日志信息先放入到redo log buffer，然后按一定频率将其刷新到重做日志文件
 
@@ -99,11 +99,11 @@ InnoDB存储引擎首先将重做日志信息先放入到redo log buffer，然�
 - 每个事务提交时会将重做日志缓冲刷新到重做日志文件
 - 当重做日志缓冲池剩余空间小于1/2时，重做日志缓冲刷新到重做日志文件
 
-=== 额外内存池
+==== 额外内存池
 
 提供给缓冲池内部结构额外消耗使用的内存池
 
-== Checkpoint技术
+=== Checkpoint技术
 
 Write Ahead Log::
 
@@ -128,25 +128,25 @@ innoDB中有一下集中Fuzzy CheckPoint::
 * Dirty Page too much Checkpoint
 ** 脏页太多时进入checkpiont，默认脏页数据超过75%时进入
 
-== Master Thread
+=== Master Thread
 
 1.0的伪代码
 
-image::resource\master_thread_1.0.png[1.0的伪代码]
+image::resource/master_thread_1.0.png[1.0的伪代码]
 
 1.1的伪代码
 
-image::resource\master_thread_v1.1.png[]
+image::resource/master_thread_v1.1.png[]
 
-== InnoDB特性
+=== InnoDB特性
 
-=== insert buffer（delete buffer、update buffer 同理，统称change buffer）
+==== insert buffer（delete buffer、update buffer 同理，统称change buffer）
 
 对于**非聚集索引**的插入或更新操作，不是每一次直接插入到索引页中，而是先判断插入的非聚集索引页是否在缓冲池中，若在，则直接插入；若不在，则先放入到一个Insert Buffer对象中。然后再以一定的频率和情况进行Insert Buffer和辅助索引页子节点的merge（合并）操作，这时通常能将多个插入合并到一个操作中（因为在一个索引页中），这就大大提高了对于非聚集索引插入的性能。（和G1中hot card是一个思路）
 
-= mysql中的文件
+== mysql中的文件
 
-== 日志文件
+=== 日志文件
 
 * 错误日志
 ** 记录mysql运行的错误信息，默认启动
@@ -172,13 +172,13 @@ bin_log_format设bin log的格式，有3种格式
 * mixed
 ** mysql自行选择格式，大多数时候用statement，小部分情况用row
 
-== 表结构定义文件
+=== 表结构定义文件
 
 无论什么存储引擎，MySQL对于每一个表，都有一个后缀为frm的文件，记录该表的表结构定义
 
-== InnoDB存储引擎中的文件
+=== InnoDB存储引擎中的文件
 
-=== 表空间（tablespace）文件
+==== 表空间（tablespace）文件
 
 默认有一个名为ibdata1的文件，是默认表空间文件。默认所有的表数据都存储在这个文件里。
 
@@ -186,23 +186,23 @@ bin_log_format设bin log的格式，有3种格式
 
 单独的表空间文件只存储该表的数据、索引、插入缓冲的bitmap等信息，其余信息还在默认表空间（共享表空间）中
 
-image::resource\innoDB_table_file.png[innoDB表存储引擎文件]
+image::resource/innoDB_table_file.png[innoDB表存储引擎文件]
 
-=== 重做日志（redo log）文件
+==== 重做日志（redo log）文件
 
 记录innoDB存储引擎的事务日志，用于数据库恢复时候恢复数据
 
-= 表
+== 表
 
-== InnoDB逻辑存储结构
+=== InnoDB逻辑存储结构
 
 所有数据都被存放在表空间中，表空间由段、区、页组成。页也被称为块。
 
-image::resource\innoDB_table_structure.png[InnoDB逻辑存储结构]
+image::resource/innoDB_table_structure.png[InnoDB逻辑存储结构]
 
-== InnoDB行记录格式
+=== InnoDB行记录格式
 
-=== Compact行记录格式
+==== Compact行记录格式
 
 
 [width="100%",options="header,footer"]
@@ -222,15 +222,15 @@ image::resource\compact_header.png[compact记录头信息]
 
 * 事务id与回滚指针
 
-= InnoDB数据页结构
+== InnoDB数据页结构
 
-image::resource\innoDB_structure.png[InnoDB数据页结构]
+image::resource/innoDB_structure.png[InnoDB数据页结构]
 
-== Infimum和Supremum Record
+=== Infimum和Supremum Record
 
 页中的虚拟行记录，用来界定记录边界，Infimum是下界，它的主键比页中所有主键都小，Supremum是上界，它的主键比页中所有主键都大，这两个界限值都是在页创建时候被建立
 
-image::resource\infimum_supremum.png[Infimum和Supremum Record]
+image::resource/infimum_supremum.png[Infimum和Supremum Record]
 
 User Record和Free Space
 
@@ -239,14 +239,14 @@ User Record存储行记录
 Free Space是个链表，在一条记录被删除后会被加入Free Space
 
 
-= explain 
+== explain 
 
 explain 按照mysql读取表数据的顺序依次为sql语句中的每一个表返回一条数据
 
 mysql的联表：mysql从第一个表中读取一行，然后在第二个表中找到匹配的行，然后在第三个表中找到匹配的行，以此类推。当所有的表被处理完后，MySQL输出所选的列，并通过表列表回溯，直到找到一个有更多匹配行的表。从该表中读取下一行，然后继续处理下一个表。（深度优先遍历）
 
 
-== explain的输出
+=== explain的输出
 
 **id** 
 
