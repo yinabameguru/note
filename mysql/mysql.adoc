@@ -247,7 +247,17 @@ Free Space，空闲链表，在一条记录被删除后会被加入Free Space
 
 由于页中使用的是稀疏目录，所以在slot间进行二分查找只能得到一个粗略的位置，即slot中主键序最小的数据（二分查找最终查找到一个slot，slot中最多有6条数据）。之后InnoDB会利用record header中的n_owned属性确定当前slot的实际size，之后按数量遍历。
 
+=== file trailer
 
+用来校验页的完整性
+
+== InnoDB中查找一个数据行的全过程
+
+. 通过二级索引，在b-tree中找到目标记录的主键id
+. 通过聚簇索引在b-tree中找到主键id所在的数据页
+. 若数据页不在缓冲池中，加载到缓冲池
+. 在数据页通过二分查找在slots中找到目标数据所在的slot
+. 通过slot中第一条数据的n_owned数据确定当前slot的实际size，之后遍历，找到目标数据行
 
 == explain 
 
