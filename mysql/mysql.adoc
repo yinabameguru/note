@@ -218,13 +218,16 @@ image::resource/innoDB_table_structure.png[InnoDB逻辑存储结构]
 ** 记录null列的位置，把数据为空的列对应的二进制位置标为1
 
 * 记录头
+
 image::resource\compact_header.png[compact记录头信息]
 
 * 事务id与回滚指针
 
 == InnoDB数据页结构
 
-image::resource/innoDB_structure.png[InnoDB数据页结构]
+https://dev.mysql.com/doc/internals/en/innodb-page-overview.html[mysql文档中关于页结构的描述]
+
+image::resource/innoDB_page_structure.png[InnoDB数据页结构]
 
 === Infimum和Supremum Record
 
@@ -232,11 +235,18 @@ image::resource/innoDB_structure.png[InnoDB数据页结构]
 
 image::resource/infimum_supremum.png[Infimum和Supremum Record]
 
-User Record和Free Space
+=== User Record和Free Space
 
 User Record存储行记录
 
-Free Space是个链表，在一条记录被删除后会被加入Free Space
+Free Space，空闲链表，在一条记录被删除后会被加入Free Space
+
+=== page directory
+
+一个稀疏目录，存储指向页中record的指针，这些指针称为slot，用于快速查找页中的record。每个slot追踪了6个record，slot中按照主键的逻辑顺序去追踪record。由于slot是按主键排序，并且固定尺寸的，所以在页中很容易通过二分查找查找数据。
+
+由于页中使用的是稀疏目录，所以在slot间进行二分查找只能得到一个粗略的位置，即slot中主键序最小的数据（二分查找最终查找到一个slot，slot中最多有6条数据）。之后InnoDB会利用record header中的n_owned属性确定当前slot的实际size，之后按数量遍历。
+
 
 
 == explain 
