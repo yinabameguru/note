@@ -3,6 +3,8 @@
 .跳跃表节点的结构
 image::resource\skip_list_node.png[跳跃表节点的结构]
 
+**跳跃表中的节点是有序的**
+
 .跳跃表中添加元素
 image::resource\Skip_list_add_element-en.gif[跳跃表中添加元素]
 

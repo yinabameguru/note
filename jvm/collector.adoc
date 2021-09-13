@@ -59,7 +59,7 @@ TIP: 有些人认为Web服务器的正确度量标准是吞吐量，因为垃圾
 
 **分代垃圾收集器**
 
-image::../resource/jsgct_dt_006_prm_gn_sz_new.png[]
+image::jsgct_dt_006_prm_gn_sz_new.png[]
 
 初始化时，vm向操作系统申请Xmx大小的连续虚拟内存地址空间，按-XX: NewRatio=nnn，分配给年轻代和老年代。年轻代按-XX: SurvivorRatio=nnn，将年轻代分为1个eden和2个survivor
 
@@ -495,6 +495,9 @@ G1中何时算作marking完成？1、并发标记遍历了所有的SATB中的对
 
 在与用户线程并发的情况下，用户线程会不断的向buffer中添加数据，因此达到条件2比较难，所以这里有一次STW。停止用户线程，清空buffer就很容易了。情况buffer的过程是并行的，防止某些buffer处理慢导致停顿时间长。
 
+remark阶段与clean up之间，会计算每个region的活对象数，期间会发生youngGC，多个GC线程会向同一个region中写入对象，会有锁竞争问题。
+
+clean up 最终停顿阶段，跟进region的回收价值对region进行一次排序。这个阶段，也会回收空region。
 
 
 === G1 step by step(基于jdk7，新版本可能有些许变化)

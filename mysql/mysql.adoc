@@ -348,7 +348,7 @@ ref表示了某些列（列名）、常量集合（使用> 或< 等，展示数�
 可以从索引获取到全部数据，不需要根据主键回表（聚簇索引、覆盖索引）
 
 * Using index condition
-使用Index Comdition Pushdown
+使用Index Condition Pushdown
 
 * Using MRR
 使用Multi-Range Read

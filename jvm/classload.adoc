@@ -1,0 +1,98 @@
+= 虚拟机类加载机制
+
+= 类加载的时机
+
+累加载的生命周期：加载(Loading)、验证(Verification)、准备(Preparation)、解析(Resolution)、初始化(Initialization)、使用(Using)和卸载(Unloading)。
+
+加载、验证、准备、初始化和卸载这五个阶段的顺序是确定的,类型的加载过程必须按照这种顺序按部就班地**开始**
+
+有且只有六种情况必须立即对类进行**初始化**：
+
+. 遇到new、getstatic、putstatic或invokestatic这四条字节码指令时,如果类型没有进行过初始化,则需要先触发其初始化阶段。能够生成这四条指令的典型Java代码场景有:使用new关键字实例化对象的时候;读取或设置一个类型的静态字段(被final修饰、已在编译期把结果放入常量池的静态字段除外)的时候;调用一个类型的静态方法的时候。
+
+. 使用java.lang.reflect包的方法对类型进行反射调用的时候,如果类型没有进行过初始化,则需要先触发其初始化。
+
+. 当初始化类的时候,如果发现其父类还没有进行过初始化,则需要先触发其父类的初始化。
+
+. 当虚拟机启动时,用户需要指定一个要执行的主类(包含main()方法的那个类),虚拟机会先初始化这个主类。
+
+. 当使用JDK 7新加入的动态语言支持时,如果一个java.lang.invoke.MethodHandle实例最后的解析结果为REF_getStatic、REF_putStatic、REF_invokeStatic、REF_newInvokeSpecial四种类型的方法句柄,并且这个方法句柄对应的类没有进行过初始化,则需要先触发其初始化。
+
+. 当一个接口中定义了默认(default)方法时,如果有这个接口的实现类发生了初始化,那该接口要在其之前被初始化。
+
+
+一些被动引用的例子，不会触发类的初始化（可能触发加载、验证、准备）
+
+[source,java]
+/**
+ * 被动使用类字段演示一:
+ * 通过子类引用父类的静态字段,不会导致子类初始化
+ **/
+public class SuperClass {
+    static {
+        System.out.println("SuperClass} init!");
+    }
+    public static int value = 123;
+}
+public class SubClass extends SuperClass {
+    static {
+        System.out.println("SubClass} init!");
+    }
+}
+/**
+ * 非主动使用类字段演示
+ **/
+public class NotInitialization {
+    public static void main(String[] args) {
+        System.out.println(SubClass.value);
+    }
+}
+
+[source,java]
+/**
+ * 被动使用类字段演示二:
+ * 通过数组定义来引用类,不会触发此类的初始化
+ **/
+public class NotInitialization {
+    public static void main(String[] args) {
+        SuperClass[] sca = new SuperClass[10];
+    }
+}
+
+[source,java]
+/**
+ * 被动使用类字段演示三:
+ * 常量在编译阶段会存入调用类的常量池中,本质上没有直接引用到定义常量的类,因此不会触发定义常量的
+ 类的初始化
+ **/
+public class ConstClass {
+    static {
+        System.out.println("ConstClass} init!");
+    }
+    public static final String HELLOWORLD = "hello world";
+}
+/**
+ * 非主动使用类字段演示
+ **/
+public class NotInitialization {
+    public static void main(String[] args) {
+        System.out.println(ConstClass.HELLOWORLD);
+    }
+}
+
+
+== 加载
+
+加载阶段主要完成三件事情：
+
+. 通过一个类的全限定名来获取定义此类的二进制字节流。
+
+. 将这个字节流所代表的静态存储结构转化为方法区的运行时数据结构。
+
+. 在内存中生成一个代表这个类的java.lang.Class对象,作为方法区这个类的各种数据的访问入口。
+
+== 验证
+
+确保Class文件中的字节流中包含的信息符合《Java虚拟机规范》
+
+文件格式验证、元数据验证、字节码验证、符号引用验证、
