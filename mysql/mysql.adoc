@@ -350,6 +350,96 @@ image:resource/btree_delete_60.png[删除60]
 
 匹配情况3：删除后，更新索引页中值为60的节点为65，叶子页的节点数 / 扇出 < 50%，合并该节点和左兄弟节点，同时合并索引页60节点的左右孩子
 
+=== B+树索引
+
+==== 聚簇索引
+
+[source,sql]
+----
+create table t (
+    a int not null,
+    b varchar(8000),
+    c int not null,
+    primary key(a),
+    key idx_c(c)
+) engine=innodb
+
+insert into t select 1, repeat('a', 7000), -1;
+insert into t select 2, repeat('a', 7000), -2;
+insert into t select 3, repeat('a', 7000), -3;
+insert into t select 4, repeat('a', 7000), -4;
+----
+
+B+树聚簇索引存储逻辑图
+
+image:resource/btree_cluster_index.png[B+树聚簇索引存储逻辑图]
+
+==== 辅助索引
+
+叶子节点除了包含键，还包含一个bookmark，指向到哪里可以找到数据，innoDB中bookmark就是聚簇索引的键
+
+image:resource/secondary_index_clustered_index_relation.png[辅助索引与聚簇索引的关系]
+
+辅助索引存储逻辑图
+
+image:resource/secondary_index.png[辅助索引存储逻辑图]
+
+其中7fffffff为-1，80000001为1
+
+==== B+树索引分裂
+
+在InnoDB中，B+中插入数据并不总是从页中间分裂，这可能导致频繁的分裂
+
+InnoDB基于数据库场景，对B+树插入做了一些改进
+
+. 若插入是随机的，则取页中间记录作为分裂点
+
+. 若往统一方向进行插入的记录数量 >= 5，且目前已定位到的记录之后存在 >= 3条记录，则分裂点为定位到的记录后的第三条记录
+
+. 若往统一方向进行插入的记录数量 >= 5，且目前已定位到的记录之后存在 < 3条记录，则分裂点为待插入记录
+
+匹配条件2的分裂
+
+image:resource/InnoDB_insert_2.png[匹配条件2的分裂]
+
+image:resource/InnoDB_insert_2_1.png[匹配条件2的分裂]
+
+匹配条件3的分裂
+
+image:resource/InnoDB_insert_3.png[匹配条件3的分裂]
+
+==== 覆盖索引
+
+从辅助索引可以查到需要的记录，不需要到聚簇索引进行第二次查询
+
+还可以通过覆盖索引优化统计查询 例如count(*)，因为辅助索引比聚簇索引小很多，可以减小io
+
+=== Multi-Range Read(MRR)
+
+把通过辅助索引查出来的主键进行排序后，再回表，将随机io转化为顺序io，提升io性能
+
+MRR带来的好处
+
+. 回表时候对主键排序，随机io变为顺序io
+. 减少缓冲池中页被替换的次数
+. 批处理主键回表的查询操作
+
+=== Index Condition Pushdown(ICP)
+
+在取出索引记录的时候根据索引上存储的信息过滤where条件中的范围条件
+
+而不是从聚簇索引中读出记录后在根据where条件过滤
+
+=== 倒排索引(inverted index)
+
+两个表 一个表存储文档id和文档的文案内容，另一个表存储分词与文档id（也可以同时存储文档id和文档中该分词出现的位置）的关系
+
+image:resource/full_text.png[全文检索表]
+
+image:resource/inverted_file_index.png[分词关联数组]
+
+image:resource/inverted_file_index_with_position.png[记录有分词出现位置的分词关联数组]
+
 == explain
 
 explain 按照mysql读取表数据的顺序依次为sql语句中的每一个表返回一条数据
