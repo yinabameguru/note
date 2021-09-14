@@ -1,6 +1,7 @@
 = mysql
-:toc: right
+:toc: left
 :toclevels: 4
+:toc-title: 目录
 
 == 读现象
 
