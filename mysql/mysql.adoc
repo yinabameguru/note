@@ -1,4 +1,5 @@
 = mysql
+:toc: right
 
 == 读现象
 
