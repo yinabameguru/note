@@ -1,5 +1,6 @@
 = mysql
 :toc: right
+:toclevels: 4
 
 == 读现象
 
