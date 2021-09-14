@@ -1,9 +1,12 @@
 = 垃圾收集器
+:toc: left
+:toclevels: 5
+:toc-title: 目录
 
 参考文档：
 https://docs.oracle.com/en/java/javase/11/gctuning/introduction-garbage-collection-tuning.html#GUID-326EB4CF-8C8C-4267-8355-21AB04F0D304[Garbage Collection Tuning]     https://docs.oracle.com/en/java/javase/11/vm/java-virtual-machine-technology-overview.html#GUID-982B244A-9B01-479A-8651-CB6475019281[Java Virtual Machine Guide]
 
-= 什么是垃圾收集器
+== 什么是垃圾收集器
 
 可以理解为memory manager——应用程序的内存管理者
 
@@ -26,7 +29,7 @@ image::../resource/gc管理的应用的内存模型.png[width="300", height="200
 内存管理流程：
 
 
-= 垃圾收集器关注的指标
+== 垃圾收集器关注的指标
 
 最大暂停时间、吞吐量、内存占用量
 
@@ -47,7 +50,7 @@ TIP: 这里还需要考虑到硬件性能，目前的大内存延迟会有比较
 
 TIP: 有些人认为Web服务器的正确度量标准是吞吐量，因为垃圾回收期间的暂停可能是可以容忍的，或者可能被网络等待时间掩盖了，但目前的虚拟机发展好像是朝着低延迟方向的，这里似乎还有争论
 
-= 分代垃圾收集
+== 分代垃圾收集
 
 简单的串行收集器：暂停用户线程，扫描存活对象，清理死亡对象。
 
@@ -59,7 +62,7 @@ TIP: 有些人认为Web服务器的正确度量标准是吞吐量，因为垃圾
 
 **分代垃圾收集器**
 
-image::jsgct_dt_006_prm_gn_sz_new.png[]
+image:../resource/jsgct_dt_006_prm_gn_sz_new.png[]
 
 初始化时，vm向操作系统申请Xmx大小的连续虚拟内存地址空间，按-XX: NewRatio=nnn，分配给年轻代和老年代。年轻代按-XX: SurvivorRatio=nnn，将年轻代分为1个eden和2个survivor
 
@@ -75,7 +78,7 @@ TIP: 大对象直接到老年代
 
 
 
-= 影响gc性能的两个主要因素：Xmx、NewRatio
+== 影响gc性能的两个主要因素：Xmx、NewRatio
 
 
 **Xmx**
@@ -96,7 +99,7 @@ TIP: 如何减小堆内存占用？减小MaxHeapFreeRatio
 
 
 
-= 并发收集器(The Mostly Concurrent Collectors)
+== 并发收集器(The Mostly Concurrent Collectors)
 
 收集器与应用程序并发的执行部分工作，因此得名。
 
@@ -116,9 +119,9 @@ TIP: 如何减小堆内存占用？减小MaxHeapFreeRatio
 
 由于在并发阶段，最少有一个处理器被用于垃圾收集，并发收集器通常不能让单处理器（1个核心）的机器受益
 
-== G1
+=== G1
 
-=== 介绍
+==== 介绍
 
 G1收集器是为多核、大内存的机器设计的，G1要达到的目标是：几乎不需要配置，使当前应用程序，高概率的达到暂停时间目标，同时达到高吞吐量。在延迟与吞吐量之间达到最佳的平衡。
 
@@ -132,7 +135,7 @@ G1的特点::
 
 - 不超过几百毫秒的可预测暂停时间，避免长时间的暂停。
 
-=== 基本概念
+==== 基本概念
 
 **下定义**
 
@@ -148,7 +151,7 @@ G1通过追踪app以前的行为和gc停顿为相关成本建模，实现可预�
 
 G1通过疏散（evacuation）回收空间。在被选择的回收区域中找到活对象，复制到新的内存区域（标记复制），在这个过程中压缩对象的总占用空间。在疏散完成后，之前被占用活对象占用的空间将被重新用于应用程序分配。
 
-=== 堆布局
+==== 堆布局
 
 G1将堆划分为一组相同尺寸的region，每一段连续的虚拟内存空间都像下图这样。region是内存分配和回收的单位。在任何时间，这些region可以是空的，或者被指定一个特定的分代（年轻代/老年代）。当有内存请求时，G1的内存管理机制会先给一些空闲的region指定分代，然后将它们分发给app，app可以自己控制这些region内部空间的分配。
 
@@ -172,7 +175,7 @@ G1垃圾收集暂停可以回收整个年轻代，并且额外回收部分老年
  
 G1将collection set中的活对象分配到一个或多个不同的空region，整个年轻代将被复制到survivor或者old，old到其他old。
 
-=== 垃圾收集循环（garbage collection cycle）
+==== 垃圾收集循环（garbage collection cycle）
 
 从较高的层面看，G1在两个阶段中交替::
 
@@ -201,7 +204,7 @@ space-reclamation phase结束后，收集循环将重新由一次young-only phas
 
 如果在收集活动信息时（标记阶段）发生oom，G1将直接执行一次Full GC。
 
-=== G1内部细节
+==== G1内部细节
 
 * 确定IHOP
 
@@ -263,7 +266,7 @@ Space-Reclamation Phase 分代大小调整
 
 当collection set candidates中可以被回收的剩余空间小于-XX:G1HeapWastePercent时，Space-Reclamation Phase结束。
 
-=== 一些参数的默认值
+==== 一些参数的默认值
 
 
 -XX:MaxGCPauseMillis=200::
@@ -301,15 +304,15 @@ space-reclamation phase阶段预期的gc次数，默认是8次
 关于 G1老年代将要使用多少，如何避免long mixed collection pauses
 详见 https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A[Garbage-First Garbage Collector Tuning]
 
-=== 关键的数据结构、机制
+==== 关键的数据结构、机制
 
-==== TLAB（Thread-Local Allocation Buffers）
+===== TLAB（Thread-Local Allocation Buffers）
 
 解决多多线程在堆上分配对象时的竞争问题
 
 线程从堆中申请一段缓冲区，用于线程本地分配对象，TLAB内部有3个指针，start、top、end，start、end用于标记TLAB的边界，top用于区分已使用和未使用区域。当TLAB中剩余空间无法容纳当前分配对象时，  可能分配在TLAB外，也可能申请一个新的TLAB，通过一些参数可以配置。
 
-==== 三色标记（tricolor marking）
+===== 三色标记（tricolor marking）
 
 实现了gc线程与app线程的并发执行，解决了传统mark-and-sweep收集器在整个gc期间需要STW，全堆扫描的问题。
 
@@ -363,9 +366,10 @@ image::Animation_of_tri-color_garbage_collection.gif[Animation_of_tri-color_garb
 条件二：赋值器删除了全部从灰色对象到该白色对象的直接或间接引用。
 
 image::tricolor_marking_lose_object.png[tricolor_marking_lose_object]
-image::tricolor_marking_lose_object_v2.png[tricolor_marking_lose_object_v2]
 
-==== Remembered Set
+image::tricolor_marking_lose_object_v2.gif[tricolor_marking_lose_object_v2]
+
+===== Remembered Set
 
 region中被划分为多个card table。cardtable将512个byte映射到1个byte，对region中的部分连续空间中的对象进行聚合，粒度变粗，提升在region中查找对象的效率。
 
@@ -373,7 +377,7 @@ region中被划分为多个card table。cardtable将512个byte映射到1个byte�
 
 当app线程更改对象引用时，app线程通知到collector线程哪个**card table**发生了变更。
 
-===== Remember Set Write Barrier
+====== Remember Set Write Barrier
 
 在指针的写操作之后，会执行Remember Set Write Barrier（Barrier听起来很牛，其实就是一个post操作）。
 
@@ -383,7 +387,7 @@ region中被划分为多个card table。cardtable将512个byte映射到1个byte�
 
 简单说就是当发生指针写操作时，将card加入到buffer中，其中做了一些优化操作。
 
-===== remembered set thread
+====== remembered set thread
 
 当global buffer set size到达阈值时（默认5），remembered set thread会处理buffer，把buffer当作队列，一个个的处理队列中的card。直到global buffer set size减小到阈值的1 / 4。
 
@@ -392,7 +396,7 @@ hot card: 被频繁修改的card。为了避免频繁处理hot card，用一个�
 如何处理dirty card？remembered set thread先将card置为clean，后续的修改都将重新把card置为dirty。之后找到所有发生变化的指针中指向当前region外的指针，将当前region、当前card记录到外部region的RSet中。
 
 
-==== Evacuation Pauses
+===== Evacuation Pauses
 
 STW，将collection set中region里的或对象复制到新的region中，并释放region。对象复制移动的动作，对于app线程必须是原子的，在并发系统中实现这种原子操作代价很大，所以被安排在STW中执行。
 
@@ -400,11 +404,11 @@ Evacuation Pauses中GC工作的主要流程：串行（sequentially）构建出�
 
 在复制对象到新的region时，如何做到高效并行，均衡负载？使用了GCLAB，GC线程的本地缓冲，类似TLAB，GC线程先复制一个旧对象到GCLAB，然后线程建竞争去在老对象上设置一个转发指针，转发到复制的对象上，竞争成功的线程负责这个对象的复制和后续的依赖指针切换等工作。
 
-==== Concurrent Marking
+===== Concurrent Marking
 
 在Comcurrent Marking中，构成的collection set内部排序如何实现的garbage first？
 
-==== SATB
+===== SATB
 
 SATB是Concurrent Marking中一个重要的数据结构，通过两个bitmap实现。
 
@@ -412,7 +416,7 @@ previous bitmap: 记录的是上一次concurrent marking阶段完成时，标记
 
 next bitmap: 仅在marking过程中存在，是一个构建中的bitmap。
 
-===== TAMS (top at mark start)
+====== TAMS (top at mark start)
 
 每个regin有两个TAMS指针，nextTAMS指向这次concurrent marking开始时，region使用的top位置（也是next bitmap的top），preTAMS指向pre bitmap的top。
 
@@ -430,7 +434,7 @@ image::G1_marking.png[G1_marking]
 
 参考：G1论文，why的推文 https://mp.weixin.qq.com/s/tWsuQ0HD3RAiKzS-w6giqQ[1] https://mp.weixin.qq.com/s/p3xBnZw-kjRXTH0J-6Rmyw[2]
 
-==== Concurrent Marking Write Barrier
+===== Concurrent Marking Write Barrier
 
 解决在并发标记期间，由于 新增由某黑色对象到白色对象的引用且同时删除所有灰色对象到该白色对象引用 而导致对象丢失的问题。
 
@@ -454,6 +458,7 @@ marking thread定期的检查global set的size，中断堆遍历去处理这些b
 这个写屏障是基于Real-time garbage collection on general-purpose machines, Taiichi Yuasa（湯淺 太一） 这篇论文
 论文中的pre-write barrie抽象逻辑：
 [source,c++]
+----
 void pre_write_barrier(oop* field) {  
   if ($gc_phase == GC_CONCURRENT_MARK) { // SATB invariant only maintained during concurrent marking  
     oop old_value = *field;  
@@ -462,23 +467,25 @@ void pre_write_barrier(oop* field) {
       $mark_stack->push(old_value); // scan all of old_value's fields later  
     }  
   }  
-} 
+}
+----
 
 其中is_marked(old_value)检查旧对象是否被标记过，$mark_stack->push(old_value)标记所有旧对象引用的对象。这两个动作实际在G1的写前屏障中是没做的。实际还是做了，在logging barrier的时候会展开说明。
 
 看到这里，可以发现G1中，指针写操作的barrier实际如下：
+
 [source,c++]
-````
-void oop_field_store(oop* field, oop new_value) {  
-  pre_write_barrier(field);             // pre-write barrier: for maintaining SATB invariant  
-  *field = new_value;                   // the actual store  
-  post_write_barrier(field, new_value); // post-write barrier: for tracking cross-region reference  
-}  
-````
+----
+void oop_field_store(oop* field, oop new_value) {
+  pre_write_barrier(field);             // pre-write barrier: for maintaining SATB invariant
+  *field = new_value;                   // the actual store
+  post_write_barrier(field, new_value); // post-write barrier: for tracking cross-region reference
+}
+----
 
 写前屏障用力啊维护SATB，写后屏障用来维护remembered set。
 
-===== logging write barrier
+====== logging write barrier
 
 为了尽量减少write barrier对mutator性能的影响，G1将一部分原本要在barrier里做的事情挪到别的线程上并发执行。
 实现这种分离的方式就是通过logging形式的write barrier：mutator只在barrier里把要做的事情的信息记（log）到一个队列里，然后另外的线程从队列里取出信息批量完成剩余的动作。
@@ -489,7 +496,7 @@ void oop_field_store(oop* field, oop new_value) {
 
 参考：G1论文，https://hllvm-group.iteye.com/group/topic/44381 https://www.jfokus.se/jfokus17/preso/Write-Barriers-in-Garbage-First-Garbage-Collector.pdf
 
-==== Final Marking Pause(remark)
+===== Final Marking Pause(remark)
 
 G1中何时算作marking完成？1、并发标记遍历了所有的SATB中的对象。2、所有logging buffer都被处理完（包括线程本地的buffer和全局的buffer）。
 
@@ -500,7 +507,7 @@ remark阶段与clean up之间，会计算每个region的活对象数，期间会
 clean up 最终停顿阶段，跟进region的回收价值对region进行一次排序。这个阶段，也会回收空region。
 
 
-=== G1 step by step(基于jdk7，新版本可能有些许变化)
+==== G1 step by step(基于jdk7，新版本可能有些许变化)
 
 - G1堆结构
 
@@ -526,7 +533,7 @@ image::a_young_GC_in_G1.png[a_young_GC_in_G1]
 young GC结束
 image::end_of_young_GC_with_G1.png[end_of_young_GC_with_G1]
 
-==== G1 concurrent marking cycle phases
+===== G1 concurrent marking cycle phases
 
 . **Initial Mark(STW)**在发生一次young GC的基础上，标记有引用老年代对象的survivor region(root region)
 
@@ -540,14 +547,14 @@ image::end_of_young_GC_with_G1.png[end_of_young_GC_with_G1]
 
 . **Copying(STW)**把活对象疏散到未使用的region，可能发生在young GC、mixed GC
 
-==== G1 Old Generation Collection Step by Step
+===== G1 Old Generation Collection Step by Step
 image::initial_marking_phase.png[initial_marking_phase]
 image::concurrent_marking_phase.png[concurrent_marking_phase]
 image::remark_phase.png[remark_phase]
 image::copying_or_cleanup_phase.png[copying_or_cleanup_phase]
 image::after_cupying_or_cleanup_phase.png[after_cupying_or_cleanup_phase]
 
-=== G1实现了高性能，G1通过哪些方法去达到暂停时间目标？
+==== G1实现了高性能，G1通过哪些方法去达到暂停时间目标？
 
 以分步、并行的方式增量的进行垃圾回收
 
@@ -562,9 +569,9 @@ https://docs.oracle.com/en/java/javase/11/gctuning/garbage-first-garbage-collect
 
 https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html[Getting Started with the G1 Garbage Collector]
 
-== CMS
+=== CMS
 
-=== CMS Collection Phases
+==== CMS Collection Phases
 
 . **Initial Mark(STW)**: 标记老年代中，直接被年轻代对象引用的可达对象。停顿时间通常比minor collection pause短
 
@@ -576,7 +583,7 @@ https://www.oracle.com/technetwork/tutorials/tutorials-1876574.html[Getting Star
 
 . **Resetting**: 清理vm内部的数据结果，为下一次concurrent collection做准备
 
-=== Reviewing CMS Step By Step
+==== Reviewing CMS Step By Step
 
 . CMS的堆结构
 

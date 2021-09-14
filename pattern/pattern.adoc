@@ -1,18 +1,22 @@
+= 设计模式
+:toc: left
+:toclevels: 5
+:toc-title: 目录
 
-= 工厂模式
+== 工厂模式
 
-== 工厂方法
+=== 工厂方法
 
 **pizza工厂类图**
 
-image::resource/pizza-store.png[pizza工厂]
+image::resource/pizza-store.png[pizza工厂类图]
 
 **工厂方法模式类图**
 
 定义::
 工厂方法模式定义了一个创建对象的接口，但由子类决定要实例化的类是哪一个。工厂方法让类吧实例化推车到子类。
 
-image::resource/factory-method.png[工厂方法模式]
+image::resource/factory-method.png[工厂方法模式类图]
 
 **依赖倒置原则**
 
@@ -20,11 +24,11 @@ High level modules should not depend upon low level modules. Both should depend 
 
 即依赖抽象不依赖具体类
 
-image::resource/di-pizza.png[]
+image::resource/di-pizza.png[依赖倒置前]
 
-image::resource/di-pizza2.png[]
+image::resource/di-pizza2.png[依赖倒置后]
 
-== 抽象工厂
+=== 抽象工厂
 
 定义::提供一个接口，用于创建相关或依赖对象的家族，而不需要明确指定具体类
 
@@ -33,10 +37,10 @@ image::resource/di-pizza2.png[]
 
 **pizza原料工厂类图**
 
-image::pizza-ingredient-factory.png[]
+image::resource/pizza-ingredient-factory.png[pizza原料工厂类图]
 
 **抽象工厂模式类图**
 
-image::abstract-factory.png[]
+image::resource/abstract-factory.png[抽象工厂模式类图]
 
 

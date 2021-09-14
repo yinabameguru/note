@@ -1,12 +1,17 @@
-= 跳跃表
+= 数据结构
+:toc: left
+:toclevels: 5
+:toc-title: 目录
+
+== 跳跃表
 
 .跳跃表节点的结构
-image::resource\skip_list_node.png[跳跃表节点的结构]
+image::resource/skip_list_node.png[跳跃表节点的结构]
 
 **跳跃表中的节点是有序的**
 
 .跳跃表中添加元素
-image::resource\Skip_list_add_element-en.gif[跳跃表中添加元素]
+image::resource/Skip_list_add_element-en.gif[跳跃表中添加元素]
 
 从图上看，跳跃表有点像一个缺省一些元素的二位数组，通过这些缺省的元素实现了 跳跃 ，加快查找速度
 

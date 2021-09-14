@@ -1,0 +1,11 @@
+= note
+
+
+* link:mysql/mysql.adoc[mysql]
+
+* link:jvm/collector.adoc[Java GC]
+
+
+* link:pattern/pattern.adoc[设计模式]
+
+* link:datastructure/datastructure.adoc[数据结构]
