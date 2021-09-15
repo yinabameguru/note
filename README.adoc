@@ -1,5 +1,6 @@
 = note
 
+后端开发技术笔记，目前包括mysql、Java GC、设计模式、数据结构
 
 * link:mysql/mysql.adoc[mysql]
 
