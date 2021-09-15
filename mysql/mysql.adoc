@@ -443,6 +443,152 @@ image:resource/inverted_file_index.png[分词关联数组]
 
 image:resource/inverted_file_index_with_position.png[记录有分词出现位置的分词关联数组]
 
+== 锁
+
+=== lock与latch
+
+我们常说的数据库锁是lock。latch只存在与内存中，主要是用来控制临界资源
+
+image:resource/lock_latch.png[lock与latch比较]
+
+=== lock
+
+==== 锁类型
+
+InnoDB中实现了4种锁
+
+* 共享锁 S Lock
+* 排他锁 X Lock
+* 意向共享锁 IS Lock
+* 意向排他锁 IX Lock
+
+其中 共享锁、排他锁都是**行锁**，意向锁是锁
+
+**意向锁**
+
+意向锁代表事务希望在更细粒度上加锁
+
+例：事务在表t的某一页上加了IS Lock，表示事务希望在这一页上的某行或某些行上加S Lock
+
+所以在InnoDB中，如果把数据库存储结构看作一颗树 数据库 - 表 - 页 - 数据行，那么如果要对数据行上 S Lock 或 X Lock，那么就要对其所在的库、表、页都上相应的意向锁
+
+例：如果要对页上的记录r上X锁，那么分别要戳数据库A、表、页上意向锁IX，最后对记录r上X锁
+
+*意向锁的作用*：用来快速判断 行锁是否需要等待表锁 或 表锁是否需要等待行锁
+
+例：事务1对表1上S锁，事务2需要对表1的数据行r上x锁，那么事务2在锁住行r之前，需要对表1上IX锁，此时IX锁需要等待s锁释放。
+
+例：事务1对表1的行r上X锁，同时会对表1上IX锁，如果此时事务2需要在表1上S锁，那么事务2需要等待表1上的所有IX锁释放
+
+因此，在InnoDB中，意向锁只会导致表锁阻塞，而只有表锁可能阻塞意向锁
+
+*如何分析锁占用情况*
+
+通过表information_schema.INNODB_TRX可以查看当前执行中的事务及锁等待状态，通过表information_schema.INNODB_LOCKS可以查看锁对象的详情
+
+==== 一致性非锁定读
+
+InnoDB通过**多版本控制（MVC）**实现了非锁定读，当读取正在delete或update的行数据时，不需要等待X锁释放，可以通过快照读取。底层是通过事务中的undo段实现的。
+
+非锁定读提升了并发效率，InnoDB在默认的隔离级别下 默认是开启非锁定读的
+
+这种通过多版本控制技术，控制并发事务的行为叫做多版本并发控制（MVCC）
+
+==== 一致性锁定读
+
+InnoDB在默认repeatable read隔离级别下，是采用非锁定读的。InnoDB支持两种一致性锁定读：
+
+. select ... for update //上X锁，如果其他事务对该行上了X / S 锁，该查询会被阻塞
+. select ... lock in share mode //上S锁，如果其他事务对该行上了X锁，该查询会被阻塞
+
+=== 锁算法
+
+InnoDB中有3种锁算法：Record Lock、Gap Lock、Next-Key Lock
+
+Record Lock，行锁，最基础的锁，锁住单独的一行
+
+Gap Lock，间隙锁，锁定一个范围但不包括记录本身
+
+Next-Key Lock，临键锁，锁范围同时锁定记录本身
+
+InnoDB中，对于非唯一索引上行的锁默认都是使用一个Next-Key Lock + 一个Gap Lock实现的，对于唯一索引上行的锁都是通过Recork Lock实现的。
+
+Gap Lock，Next-Key Lock 都是为了防止多个事务讲记录插入到统一范围内，避免**幻读**
+
+唯一索引锁定示例：
+[source,sql]
+----
+create table t (a int primary key);
+insert into t select 1;
+insert into t select 2;
+insert into t select 5;
+----
+
+执行sql
+[source,sql]
+----
+#事务A，不提交事务
+select * from t where a = 5 for update;
+
+#事务B，提交事务，不会被阻塞
+insert into t select 4;
+
+----
+
+由于列a是唯一索引，因此事务A执行时Next-Key Lock降级为Record Lock，只锁定a=5一行，之后事务B的插入不会被阻塞
+
+非唯一索引锁定示例：
+[source,sql]
+----
+create table z (a int, b int, primary key(a), key(b));
+insert into z select 1, 1;
+insert into z select 3, 1;
+insert into z select 5, 3;
+insert into z select 7, 6;
+insert into z select 10, 8;
+----
+
+执行sql
+[source,sql]
+----
+#事务A，不提交事务
+select * from z where b = 3 for update;
+
+#事务B，执行这些sql都会被阻塞
+
+#a=5被加上Record Lock
+select * from z where a = 5 lock in share mode;
+
+#(1, 3]被加上Next-Key Lock
+insert into z select 4,2;
+
+#(3, 6)被加上Gap Lock
+insert into z select 6,5;
+----
+
+事务A执行时，会对辅助索引上范围(1, 3]加Next-Key Lock，对(3, 6)加Gap Lock。对主键索引a=5加上Record Lock
+
+==== 由于Next-Key Lock导致的插入阻塞问题
+
+以上都读、写某一行数据时候使用Next-Key Lock和Gap Lock的情况，在使用范围查询时候也会使用Next-Key Lock
+
+[source,sql]
+----
+select * from t where a > 2 for update;
+----
+
+这个查询会用Next-Key Lock对[2, +∞]上写锁，其目的是避免幻读
+
+*如果使用自增主键，锁定> 2的范围会导致其他所有的插入操作被阻塞，极大影响插入效率*
+
+=== 死锁
+
+可以通过wait-for graph分析死锁
+
+=== 锁升级
+
+innoDB不是为每行记录都产生锁，是为每个页生成一个位图，进行锁管理，因此一个页中锁住多少条记录开销基本一致。
+
 == explain
 
 explain 按照mysql读取表数据的顺序依次为sql语句中的每一个表返回一条数据
