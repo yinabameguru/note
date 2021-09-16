@@ -24,7 +24,7 @@ ____
 
 
 
-
+[[isolation]]
 == 事务隔离级别
 
 * 串行化
@@ -223,7 +223,7 @@ image::resource/innoDB_table_structure.png[InnoDB逻辑存储结构]
 
 * 记录头
 
-image::resource\compact_header.png[compact记录头信息]
+image::resource/compact_header.png[compact记录头信息]
 
 * 事务id与回滚指针
 
@@ -596,6 +596,160 @@ InnoDB不是为每行记录都产生锁，是为每个页生成一个位图，�
 
 由于数据库中的锁并不是完全互斥的，所以会带来一些问题，主要包括脏读、不可重复读、幻读，参考
 <<lock_problem, 读现象>>
+
+== 事务
+
+=== ACID
+
+*Atomicity*
+
+原子性，事务中的操作要么都执行，要么都不执行
+
+*Consistency*
+
+一致性，事务只能讲数据库从一种一致状态转换到另一种一致状态，确保事务不能破坏数据库约束（例如主键约束、唯一键约束、非空约束等）
+
+*Isolation*
+
+隔离性，多个事务间操作的数据要隔离，通常数据库都设有隔离级别，参考<<isolation, 事务隔离级别>>
+
+*Durability*
+
+持久性，事务一旦提交，其产生的变化就是永久的
+
+=== 事务分类
+
+事务分类：
+
+. 扁平事务
+. 带有保存点的扁平事务
+. 链式事务
+. 嵌套事务
+. 分布式事务
+
+
+扁平事务可以看作是只有一个保存点的保存点事务，即在事务开始时候设置一个保存点，只能回滚到这个保存点
+
+带有保存点的扁平事务，即在事务执行过程中，可以设置多个保存点，回滚时候可以指定保存点回滚到指定位置
+
+链式事务，在提交一个事务的时候直接开启下一个事务，可以看作是只能回滚到最近一个保存点的保存点事务
+
+嵌套事务，一颗事务树，只有在root提交后，下层节点提交的事务才能生效。某一节点的事务回滚后，会引起它所有的子事务回滚，可以通过保存点事务实现
+
+=== 事务的实现
+
+ACID通过redo log和undo log实现
+
+InnoDB通过Force Log at Commit机制实现持久性，即在事务提交时必须先事务日志写入到redo log 和 undo log，才算事务完成。其中redo log用来保证D，undo log 用来保证AC，同时基于undo实现了MVCC，而基于MVCC保证了I
+
+redo用来恢复数据，undo用来回滚数据
+
+==== redo
+
+redo由两部分组成：redo log buffer、redo log file，将重做日志缓冲刷到重做日志磁盘的时候，操作系统会先将日志从重做日志缓冲刷到文件系统缓冲，这时InnoDB会调用一次fsync，把日志从文件系统缓冲刷到磁盘
+
+InnoDB默认是在每一次事务提交的时候都会调用一次fsync。（master线程中每1秒也会进行一次redo的fsync）
+
+而在redis中如果采用aof持久化，默认是将日志写入缓存，*每1秒执行一次fsync*
+
+fsync这个io很花时间，所以即使mysql 的缓冲池足够大，性能可能也仍然比不上redis。但InnoDB在每次事务提交都调用ysync的行为确保了数据更加不易丢失。
+
+在InnoDB和redis中，调用调用fsync的频率都是可以通过参数控制的
+
+===== redo log 与 bin log 比较
+
+. redo log是InnoDB在引擎层实现的，bin log是mysql服务层实现的，因此所有的存储引擎都由bin log
+
+. redo log记录的是页的修改，bin log记录的是sql语句
+
+. redo log写入磁盘不仅在事务提交时候执行，master线程每1秒、10秒都会执行，而bin log写入磁盘只在事务提交时候执行一次
+
+===== redo log block
+
+无论是在缓冲池还是磁盘，redo log都是一block格式保存的，每个block大小设置为512，和磁盘扇区大小一致，因此写入磁盘可以保证原子性，这是InnoDB对写入磁盘做的设计优化
+
+.redo log buffer 结构
+image:resource/redo_log_buffer.png[redo log buffer 结构]
+
+redo log buffer 由一个redo log block 数组组成，
+
+redo log中的logblock在哪些时候被刷到磁盘：
+
+. 事务提交时
+. 当log buffer中由一半的内存空间已经被使用时
+. log checkpoint时
+
+===== LSN
+
+Log Sequence Number 日志序列号，表示写入重做日志的字节总量，单位是字节
+
+例：当前redo log的LSN=1000，事务t1写入了100字节的redo log，此时LSN=1100，之后事务t2写入了200字节的redo log，此时LSN=1300
+
+在页的header中页记录着该页的LSN，表示该页最后刷新时候的LSN
+
+数据库启动时，假如InnoDB检测到redo log 中LSN=1300，并且该事务已经提交，而页P中LSN=1000，那么数据库会对页P进行数据恢复，将重做日志应用到P
+
+恢复数据时，redo log是物理页修改，是幂等的，bin log是执行sql语句，不是幂等的（例如 insert操作，bin log执行多次会插入多条）
+
+==== undo
+
+与redo不同，undo不是存放在log file中，而是存放在共享表空间中的 undo segment中
+
+*undo也是逻辑日志*，恢复数据时候只是通过sql逻辑的恢复到原来的数据。例：在执行insert语句后，undo会记录 一个delete语句，执行rollback，undo会执行delete语句，恢复数据
+
+InnoDB中的mvcc同过undo实现，当用户读取一条数据时候，如果已经被其他事务锁定，当前事务可以通过undo读取之前版本的数据，实现非锁定读
+
+===== undo存储管理
+
+InnoDB的共享表空间（ibdata1）中有定义 rollback segment，每个rollback segment中有1024个undo log segment，每个undo log segment中分配undo page记录undo log
+
+[plantuml,undo,svg,opts="inline",svg-type="inline"]
+----
+
+class DefaultTableSpace {
+}
+
+class RollBackSegment {
+}
+
+class UndoLogSegment {
+}
+
+class UndoPage {
+ List<UndoLog> undoLogs
+}
+
+DefaultTableSpace *--> RollBackSegment : 老版本只有1个RBS，新版本可以支持128个RBS
+RollBackSegment *--> "0...1024" UndoLogSegment
+UndoLogSegment *--> "0...n" UndoPage
+
+----
+
+由于undo log存放在页中，是需要持久化的，而redo log是基于页修改产生的日志，所以在产生undo log时，也会产生redo log
+
+在事务提交时候会执行2个操作：
+
+. 将undo log放入history list中，之后由purge线程清理。但此时undo log还不能马上被删除，因为可能有其他事务需要通undo log访问之前版本的数据。因此，是否删除、哪时候删除都由purge线程判断执行
+
+. 判断undo log所以在页是否可以重用，若undo log页的使用空间小于3 / 4，就可以重用，之后的undo log会继续记录在该页
+
+===== history list
+
+事务提交时候会通过头插将undo log放入到history list中，因此history list中的undo log实质是按事务提交时间排序的
+
+purge线程在清理undo log时候，会先从history list尾找到一个需要被清理的undo log，然后清理，然后清理该undo log页中其他可以被清理的undo log，之后继续向前遍历history list
+
+这种先通过history list找undo log，再从该页找undo log的方式，再一次遍历中，每个undo log页只需要被加载到内存1次，减小了磁盘IO，提高purge效率
+
+===== group commit
+
+事务提交时候会进行两阶段操作：
+
+. 修改内存缓冲中的事务信息，把重做日志写入重做日志缓冲
+
+. 调用fsync把重做日志缓冲刷到磁盘
+
+由于步骤2执行慢，所以当以一个事务t1在执行步骤2期间，可能有多个事务执行完成步骤1，当t1执行完成步骤2时，下一个事务开始执行步骤2，此时会将多个完成步骤1的事务相关的内容在一次fsync中刷到磁盘，减小fsync次数，大大减小了磁盘io压力
 
 == explain
 
