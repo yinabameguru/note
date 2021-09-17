@@ -388,4 +388,4 @@ In the first line of the example this is 239M->57M(307M), which means that 239 M
 
 主要组件是class loader、runti data areas、execution engine。其中与性能相关的是heap、JIT编译器、GC
 
-image::hotspot_architecture.png[hotspot_architecture]
+image::resource/hotspot_architecture.png[hotspot_architecture]

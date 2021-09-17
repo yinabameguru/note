@@ -44,7 +44,7 @@ the tri-color invariant：
 
 三色标记提供的一个重要特性，黑色集合的对象不能直接指向白色集合，这确保了当灰色集合为空时，白色集合的对象都可以被回收。
 
-image::Animation_of_tri-color_garbage_collection.gif[Animation_of_tri-color_garbage_collection]
+image::resource/Animation_of_tri-color_garbage_collection.gif[Animation_of_tri-color_garbage_collection]
 
 标记过程中，由于引用的变动，会导致两种问题
 
@@ -56,7 +56,7 @@ image::Animation_of_tri-color_garbage_collection.gif[Animation_of_tri-color_garb
 
 条件二：赋值器删除了全部从灰色对象到该白色对象的直接或间接引用。
 
-image::tricolor_marking_lose_object.png[tricolor_marking_lose_object]
+image::resource/tricolor_marking_lose_object.png[tricolor_marking_lose_object]
 
 
 == SATB
@@ -81,7 +81,7 @@ initial marking结束后，进入concurrent marking阶段，即从GCRoot出发�
 
 至此，prebitmap中就标记除了每一个region中的黑色对象与白色对象，在下一个阶段执行的多次mixed GC中回收。
 
-image::G1_marking.png[G1_marking]
+image::resource/G1_marking.png[G1_marking]
 
 == Concurrent Marking Write Barrier
 
@@ -126,13 +126,13 @@ void pre_write_barrier(oop* field) {
 
 看到这里，可以发现G1中，指针写操作的barrier实际如下：
 [source,c++]
-````
+----
 void oop_field_store(oop* field, oop new_value) {  
   pre_write_barrier(field);             // pre-write barrier: for maintaining SATB invariant  
   *field = new_value;                   // the actual store  
   post_write_barrier(field, new_value); // post-write barrier: for tracking cross-region reference  
 }  
-````
+----
 
 写前屏障用来维护SATB，写后屏障用来维护remembered set。
 

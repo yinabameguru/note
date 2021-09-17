@@ -1,6 +1,6 @@
 = 虚拟机类加载机制
 
-= 类加载的时机
+== 类加载的时机
 
 累加载的生命周期：加载(Loading)、验证(Verification)、准备(Preparation)、解析(Resolution)、初始化(Initialization)、使用(Using)和卸载(Unloading)。
 
@@ -81,7 +81,7 @@ public class NotInitialization {
 }
 
 
-== 加载
+=== 加载
 
 加载阶段主要完成三件事情：
 
@@ -91,7 +91,7 @@ public class NotInitialization {
 
 . 在内存中生成一个代表这个类的java.lang.Class对象,作为方法区这个类的各种数据的访问入口。
 
-== 验证
+=== 验证
 
 确保Class文件中的字节流中包含的信息符合《Java虚拟机规范》
 
