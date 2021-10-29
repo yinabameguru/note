@@ -5,63 +5,36 @@ v1.0, 2020-10-25
 :toc-title: 目录
 :toclevels: 5
 
-== spring 代码学习
-
-'''
 
 
-=== PropertySource
+== 如何自己实现一个@Autowired注解
 
-[quote, aaa]
+. 扫描包，拿到Class[]
+. 遍历Class[]，通过class.getDeclaredFields()拿到类字段field[]
+. 遍历field[]，通过field.getAnnotation(AutoWired.class) != null过滤出有AutoWired注解的字段
+. 通过field.getType().newInstance()(直接new不能保证单例了，sprring中会复杂些)创建需要注入的对象实例autoWiredInstance
+. 通过field.set(parentClassInstance, autoWiredInstance)注入
+
+== BeanFactory FactoryBean
+
+FactoryBean 装饰器模式、工厂模式、代理
+
+== PropertySource
+
+[quote]
 ____
 Abstract base class representing a source of name/value property pairs
 ____
 
-一个用于表示name/value数据对的抽象类,String name，T source
+spring中的KV抽象
 
-==== EnumerablePropertySource
-
+EnumerablePropertySource::
 枚举化的PropertySource
 
-===== CommandLinePropertySource
-
+CommandLinePropertySource::
 命令行PropertySource
 
-====== SimpleCommandLinePropertySource
-
+SimpleCommandLinePropertySource::
 参数类型是String的命令行
 
-关联类::
 
-- [red]#CommandLineArgs# 
-命令行参数实体类，包含optionArgs、nonOptionArgs两个属性字段以及对应的添加、查询操作方法
-
-- [red]#SimpleCommandLineArgsParser#
-命令行参数解析类，提供parse方法，将字符串数组解析为CommandLineArgs
-
-
-
-== spring 应用学习
-
-
-== 编码技巧学习
-
-=== 向Map<String, List<String>>中添加元素
-[source,java]
-----
-private final Map<String, List<String>> optionArgs = new HashMap<>();
-	public void addOptionArg(String optionName, @Nullable String optionValue) {
-		if (!this.optionArgs.containsKey(optionName)) {
-			this.optionArgs.put(optionName, new ArrayList<>());
-		}
-		if (optionValue != null) {
-			this.optionArgs.get(optionName).add(optionValue);
-		}
-	}
-----
-
-
-== spring feature
-
-
-=== null-safety
