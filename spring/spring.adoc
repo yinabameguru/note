@@ -37,4 +37,20 @@ CommandLinePropertySource::
 SimpleCommandLinePropertySource::
 参数类型是String的命令行
 
+== spi
 
+service provider interface，服务提供接口，接口实际归属于接口调用方，由接口调用方定义接口，接口实现方只负责实现
+
+spring中的ConfigurableApplicationContext就是spi接口
+
+== BeanFactory
+
+*BeanFactory继承关系*
+
+image::resource/BeanFactory.png[]
+
+== ApplicationContext
+
+*ApplicationContext继承关系*
+
+image::resource/ApplicationContext.png[]

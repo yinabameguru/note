@@ -1,0 +1,120 @@
+@startuml
+'https://plantuml.com/class-diagram
+
+interface BeanFactory
+interface HierarchicalBeanFactory
+interface ListableBeanFactory
+interface AutowireCapableBeanFactory
+interface ApplicationContext
+interface ConfigurableBeanFactory
+interface ConfigurableListableBeanFactory
+
+BeanFactory <|-- HierarchicalBeanFactory
+BeanFactory <|-- ListableBeanFactory
+BeanFactory <|-- AutowireCapableBeanFactory
+ListableBeanFactory <|-- ApplicationContext
+HierarchicalBeanFactory <|-- ApplicationContext
+HierarchicalBeanFactory <|-- ConfigurableBeanFactory
+ListableBeanFactory <|-- ConfigurableListableBeanFactory
+AutowireCapableBeanFactory <|-- ConfigurableListableBeanFactory
+ConfigurableBeanFactory <|-- ConfigurableListableBeanFactory
+
+@enduml
+
+@startuml
+'https://plantuml.com/class-diagram
+
+interface ApplicationContext {
+应用上下文：1是一个可以创建bean的工厂 2可以加载文件 3可以发布事件 4可以解析消息
+}
+interface ConfigurableApplicationContext {
+spi接口，实现这个接口的上下文需要提供配置（修改）上下文的功能。
+springboot创建的容器返回值用的这个接口
+}
+interface ReactiveWebApplicationContext
+interface WebServerApplicationContext {
+实现这个接口的上下文要提供创建和管理内嵌WebServer的能力
+}
+interface WebApplicationContext {
+web应用上下文，实现这个接口的上下文要提供ServletContext
+ServletContext getServletContext()
+}
+
+ApplicationContext <|-- ConfigurableApplicationContext
+ApplicationContext <|-- ReactiveWebApplicationContext
+ApplicationContext <|-- WebServerApplicationContext
+ApplicationContext <|-- WebApplicationContext
+
+interface ConfigurableWebServerApplicationContext {
+1可配置 2提供WebServer 的上下文接口
+}
+interface ConfigurableWebApplicationContext {
+1可配置 2提供ServletContext 的上下文接口
+}
+interface ConfigurableReactiveWebApplicationContext
+
+
+ConfigurableApplicationContext <|-- ConfigurableWebServerApplicationContext
+WebServerApplicationContext <|-- ConfigurableWebServerApplicationContext
+
+ConfigurableApplicationContext <|-- ConfigurableWebApplicationContext
+WebApplicationContext <|-- ConfigurableWebApplicationContext
+
+ConfigurableApplicationContext <|-- ConfigurableReactiveWebApplicationContext
+ReactiveWebApplicationContext <|-- ConfigurableReactiveWebApplicationContext
+
+abstract class AbstractApplicationContext
+class GenericApplicationContext
+abstract class AbstractRefreshableApplicationContext
+abstract class AbstractRefreshableConfigApplicationContext
+abstract class AbstractXmlApplicationContext
+class FileSystemXmlApplicationContext
+class ClassPathXmlApplicationContext
+abstract class AbstractRefreshableWebApplicationContext
+class XmlWebApplicationContext
+class GroovyWebApplicationContext
+class AnnotationConfigWebApplicationContext
+class StaticApplicationContext
+class StaticWebApplicationContext
+class GenericWebApplicationContext
+class ServletWebServerApplicationContext
+class AnnotationConfigServletWebServerApplicationContext {
+springboot的webApplicationType为SERVLET时用这个容器（默认是SERVLET）
+}
+class XmlServletWebServerApplicationContext
+class AnnotationConfigServletWebApplicationContext
+class GenericGroovyApplicationContext
+class AnnotationConfigApplicationContext {
+springboot的webApplicationType不是SERVLET也不是REACTIVE时用这个容器
+}
+class StubWebApplicationContext
+
+
+ConfigurableApplicationContext <|-- AbstractApplicationContext
+AbstractApplicationContext <|-- GenericApplicationContext
+AbstractApplicationContext <|-- AbstractRefreshableApplicationContext
+AbstractRefreshableApplicationContext <|-- AbstractRefreshableConfigApplicationContext
+AbstractRefreshableConfigApplicationContext <|-- AbstractXmlApplicationContext
+AbstractXmlApplicationContext <|-- FileSystemXmlApplicationContext
+AbstractXmlApplicationContext <|-- ClassPathXmlApplicationContext
+AbstractRefreshableConfigApplicationContext <|-- AbstractRefreshableWebApplicationContext
+ConfigurableWebApplicationContext <|-- AbstractRefreshableWebApplicationContext
+AbstractRefreshableWebApplicationContext <|-- XmlWebApplicationContext
+AbstractRefreshableWebApplicationContext <|-- GroovyWebApplicationContext
+AbstractRefreshableWebApplicationContext <|-- AnnotationConfigWebApplicationContext
+GenericApplicationContext <|-- GenericXmlApplicationContext
+GenericApplicationContext <|-- StaticApplicationContext
+StaticApplicationContext <|-- StaticWebApplicationContext
+ConfigurableWebApplicationContext <|-- StaticWebApplicationContext
+GenericApplicationContext <|-- GenericWebApplicationContext
+ConfigurableWebApplicationContext <|-- GenericWebApplicationContext
+GenericWebApplicationContext <|-- ServletWebServerApplicationContext
+ConfigurableWebServerApplicationContext <|-- ServletWebServerApplicationContext
+ServletWebServerApplicationContext <|-- AnnotationConfigServletWebServerApplicationContext
+ServletWebServerApplicationContext <|-- XmlServletWebServerApplicationContext
+GenericWebApplicationContext <|-- AnnotationConfigServletWebApplicationContext
+GenericApplicationContext <|-- GenericGroovyApplicationContext
+GenericApplicationContext <|-- AnnotationConfigApplicationContext
+WebApplicationContext <|-- StubWebApplicationContext
+
+@enduml
