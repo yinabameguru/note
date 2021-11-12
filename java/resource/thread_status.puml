@@ -1,0 +1,25 @@
+@startuml
+state new
+state runnable {
+state ready
+state running
+
+ready --> running : 线程被调度器选中，cpu运行
+running --> ready : 线程被挂起（切换到下一个线程的时间片了） \n Thread.yield
+}
+state blocked
+state waiting
+state timed_waiting
+state terminated
+
+[*] --> new : new Thread()
+new --> runnable : Thread.start()
+runnable --> terminated : 线程运行结束或者异常退出
+runnable --> timed_waiting : Thread.sleep \n Object.wait \n Thread.join \n LockSupport.parkNanos \n LockSupport.parkUntil
+timed_waiting --> runnable : 时间结束
+runnable --> waiting : Object.wait \n Thread.join \n LockSupport.park
+waiting --> runnable : Object.notify \n Object.notifyAll \n LockSupport.unpark
+runnable --> blocked : 等待进入同步代码块 \n synchronized
+blocked --> runnable : 获得锁
+
+@enduml
